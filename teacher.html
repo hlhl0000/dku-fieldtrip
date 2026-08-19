@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>교사 대시보드 — 단국대 현장체험학습</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* teacher.html 전용 스타일. 공용 규칙은 css/style.css에 있다.
+   가로로 긴 표는 페이지가 아니라 이 상자 안에서만 옆으로 밀린다
+   (뷰포트 320px에서도 document.scrollWidth ≤ innerWidth 를 지키기 위한 것). */
+.grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.teacher-grid { border-collapse: collapse; min-width: 100%; font-size: 13px; }
+table.teacher-grid th,
+table.teacher-grid td {
+  border: 1px solid var(--line);
+  padding: 6px;
+  text-align: center;
+  vertical-align: top;
+  white-space: nowrap;
+}
+table.teacher-grid th { background: #eef2f8; font-weight: 700; }
+table.teacher-grid th.group-col, table.teacher-grid td.group-col {
+  position: sticky; left: 0; background: var(--card); z-index: 1; text-align: left;
+}
+table.teacher-grid th.group-col { background: #eef2f8; }
+.cell-btn {
+  width: 88px; padding: 4px; border: 0; background: transparent;
+  cursor: pointer; display: block; margin: 0 auto;
+}
+.cell-btn:disabled { cursor: default; opacity: 1; }
+.cell-thumb {
+  display: block; width: 72px; height: 54px; object-fit: cover;
+  border-radius: 4px; margin: 0 auto 4px; background: #e9ecf1;
+}
+.cell-empty {
+  display: block; width: 72px; height: 54px; border-radius: 4px;
+  margin: 0 auto 4px; background: #f0f2f5; color: var(--lock);
+  font-size: 11px; line-height: 54px;
+}
+.cell-loc { display: block; font-size: 11px; color: var(--ink-weak); margin-top: 2px; white-space: normal; word-break: keep-all; }
+.row-progress { font-size: 12px; color: var(--ink-weak); }
+#full-preview { display: block; width: 100%; max-width: 360px; margin: 0 auto 8px; border-radius: 8px; }
+.head-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; justify-content: space-between; }
+.head-row button { width: auto; flex: 0 0 auto; padding: 8px 14px; }
+</style>
+</head>
+<body class="page-teacher">
+<main id="app">
+  <header class="app-header">
+    <h1>교사 대시보드</h1>
+    <p class="sub" id="mode-text"></p>
+  </header>
+
+  <!-- ── 교사 로그인 ────────────────────────────────────────────────────── -->
+  <section id="teacher-login-card" class="card">
+    <form id="teacher-login-form" novalidate>
+      <div class="field">
+        <label for="teacher-class">반</label>
+        <select id="teacher-class" name="classId" required></select>
+      </div>
+      <div class="field">
+        <label for="teacher-email">교사 이메일</label>
+        <input id="teacher-email" name="email" type="text" inputmode="email"
+               autocomplete="username" autocapitalize="off" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="teacher-password">비밀번호</label>
+        <input id="teacher-password" name="password" type="password"
+               autocomplete="current-password" required>
+      </div>
+      <p id="teacher-login-error" class="error" role="alert" hidden></p>
+      <button id="teacher-login-btn" type="submit">대시보드 열기</button>
+    </form>
+    <p class="note" id="teacher-login-hint"></p>
+  </section>
+
+  <!-- ── 대시보드 ──────────────────────────────────────────────────────── -->
+  <section id="dashboard-card" class="card" hidden>
+    <div class="head-row">
+      <h2 class="section-title" id="class-name">반</h2>
+      <span class="row-progress">마지막 갱신 <span id="last-update">없음</span></span>
+    </div>
+    <p id="delay-note" class="note offline-note"></p>
+    <p id="grid-empty" class="note" hidden>아직 만든 모둠이 없습니다. 관리 화면에서 모둠을 만드세요.</p>
+    <div class="grid-wrap">
+      <table class="teacher-grid" id="grid">
+        <thead><tr id="grid-head"></tr></thead>
+        <tbody id="grid-body"></tbody>
+      </table>
+    </div>
+    <p class="note">사진 칸을 누르면 원본을 불러옵니다. 원본은 누른 사진 1건만 읽습니다.</p>
+  </section>
+
+  <!-- ── 원본 보기 (탭했을 때만 1건 읽는다) ─────────────────────────────── -->
+  <section id="full-card" class="card" hidden>
+    <div class="head-row">
+      <h2 class="section-title" id="full-caption">원본</h2>
+      <button id="full-close" type="button" class="secondary">닫기</button>
+    </div>
+    <img id="full-preview" alt="인증사진 원본">
+    <p id="full-msg" class="note" role="status"></p>
+  </section>
+
+  <section id="teacher-nav" class="card" hidden>
+    <div class="button-row">
+      <a id="admin-link" class="link-button" href="admin.html">관리 화면</a>
+      <button id="teacher-logout" type="button" class="secondary">로그아웃</button>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { MODE, classIds, classLabels } from './js/firebase-config.js';
+import { db, statusOf } from './js/db.js';
+import {
+  classOptions, statusText, STATUS_TEXT, CURRENT_TEXT,
+  setText, el, clear, formatTime, registerServiceWorker
+} from './js/common.js';
+
+// 데모 모드 교사 자격 — 이 파일이 단일 원천이다(F-1).
+// 실서버 모드에서는 Firebase 콘솔에서 만든 교사 계정으로 로그인한다.
+const DEMO_TEACHER_EMAIL = 'teacher@demo.example';
+const DEMO_TEACHER_PASSWORD = 'teacher1234';
+
+// 교사 세션 표식. 비밀번호는 저장하지 않는다.
+const TEACHER_KEY = 'dku:teacher';
+
+const loginCard = document.getElementById('teacher-login-card');
+const loginForm = document.getElementById('teacher-login-form');
+const loginError = document.getElementById('teacher-login-error');
+const loginBtn = document.getElementById('teacher-login-btn');
+const classSelect = document.getElementById('teacher-class');
+const emailInput = document.getElementById('teacher-email');
+const passwordInput = document.getElementById('teacher-password');
+const dashboard = document.getElementById('dashboard-card');
+const nav = document.getElementById('teacher-nav');
+const gridHead = document.getElementById('grid-head');
+const gridBody = document.getElementById('grid-body');
+const gridEmpty = document.getElementById('grid-empty');
+const lastUpdate = document.getElementById('last-update');
+const fullCard = document.getElementById('full-card');
+const fullPreview = document.getElementById('full-preview');
+const fullCaption = document.getElementById('full-caption');
+const fullMsg = document.getElementById('full-msg');
+
+registerServiceWorker();
+
+setText(document.getElementById('mode-text'),
+  MODE === 'demo'
+    ? '데모 모드입니다. 이 기기 안의 데모 데이터만 보여 줍니다.'
+    : '서버 모드입니다. 반의 모둠 진행 상황을 실시간으로 봅니다.');
+
+setText(document.getElementById('teacher-login-hint'),
+  MODE === 'demo'
+    ? '데모 교사 계정: ' + DEMO_TEACHER_EMAIL + ' / ' + DEMO_TEACHER_PASSWORD
+    : 'Firebase 콘솔에서 만든 교사 계정으로 로그인하세요.');
+
+// 지연 주석 — 「전송 대기」뿐 아니라 「전송 오류」도 함께 알린다(v3.2 확정 25-⑵).
+// 오류·대기가 학생 화면의 해금을 막지 않으므로(확정 23), 서버에 아무것도 없는 채로
+// 코스를 끝낸 모둠이 생길 수 있다. 이 주석이 그 공백을 말로 메운다.
+// 상태 문구는 common.js의 STATUS_TEXT가 단일 원천이라 여기서 다시 타이핑하지 않는다(확정 22).
+setText(document.getElementById('delay-note'),
+  '학생 기기가 오프라인이면 사진이 그 기기에 「' + STATUS_TEXT.queued +
+  '」로, 전송이 거부되면 「' + STATUS_TEXT.error +
+  '」로 남고 이 화면에는 아직 보이지 않습니다. 두 경우 모두 학생 화면에서는 다음 장소가 열려 진행이 계속되므로, ' +
+  '이 화면이 비어 있다고 그 모둠이 멈춘 것은 아닙니다. 이 화면의 「' + STATUS_TEXT.synced +
+  '」는 서버가 받은 것만 뜻합니다. 연결이 돌아오면 몇 초 안에 채워집니다. ' +
+  '계속 비어 있는 모둠은 만났을 때 미션 화면 맨 위의 「다시 전송」을 눌러 보게 하세요.');
+
+classOptions().forEach(function (opt) {
+  const o = document.createElement('option');
+  o.value = opt.id;
+  o.textContent = opt.label;
+  classSelect.appendChild(o);
+});
+
+let unsubscribe = null;
+let currentClassId = null;
+
+function showLoginError(text) {
+  setText(loginError, text);
+  loginError.hidden = !text;
+}
+
+// ── 그리드 렌더링 ─────────────────────────────────────────────────────────
+// rows = db.onDashboard 계약: [{ gid, groupNo, course, done, currentLocIndex, thumbs[] }]
+function render(rows) {
+  clear(gridHead);
+  clear(gridBody);
+  gridEmpty.hidden = rows.length > 0;
+
+  let cols = 0;
+  rows.forEach(function (r) { cols = Math.max(cols, (r.course || []).length); });
+
+  const headGroup = el('th', 'group-col', '모둠');
+  gridHead.appendChild(headGroup);
+  for (let i = 0; i < cols; i += 1) gridHead.appendChild(el('th', '', '장소 ' + (i + 1)));
+  gridHead.appendChild(el('th', '', '진행'));
+
+  rows.forEach(function (row) {
+    const course = row.course || [];
+    const state = { course: course, done: row.done || {}, pending: {}, failed: [] };
+    // 썸네일은 locIndex → thumb 대응표로 바꾼다(MockDB는 빈칸 null, FirebaseDB는 있는 것만 준다).
+    const thumbByLoc = {};
+    (row.thumbs || []).forEach(function (t) { if (t) thumbByLoc[t.locIndex] = t; });
+
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-gid', row.gid);
+    const nameCell = el('td', 'group-col', Number(row.groupNo) + '모둠');
+    tr.appendChild(nameCell);
+
+    let doneCount = 0;
+    for (let i = 0; i < cols; i += 1) {
+      const td = document.createElement('td');
+      if (i >= course.length) {
+        td.appendChild(el('span', 'cell-loc', '—'));
+        tr.appendChild(td);
+        continue;
+      }
+      const st = statusOf(state, i);
+      if (st === 'synced') doneCount += 1;
+      td.setAttribute('data-status', st);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cell-btn';
+      btn.id = 'cell-' + row.gid + '-' + i;
+      btn.setAttribute('data-status', st);
+
+      const t = thumbByLoc[i];
+      if (t && t.thumb) {
+        const img = document.createElement('img');
+        img.className = 'cell-thumb';
+        img.src = 'data:' + t.mime + ';base64,' + t.thumb;
+        img.alt = course[i].name + ' 썸네일';
+        btn.appendChild(img);
+      } else {
+        btn.appendChild(el('span', 'cell-empty', '사진 없음'));
+        btn.disabled = true;
+      }
+
+      const badge = el('span', 'badge badge-' + st, st === 'current' ? CURRENT_TEXT : statusText(st));
+      badge.id = 'badge-' + row.gid + '-' + i;
+      btn.appendChild(badge);
+      btn.appendChild(el('span', 'cell-loc', course[i].name));
+
+      if (t && t.thumb) {
+        btn.addEventListener('click', function () { openFull(row.gid, i, course[i].name); });
+      }
+      td.appendChild(btn);
+      tr.appendChild(td);
+    }
+
+    const prog = el('td', '', '');
+    const progText = el('span', 'row-progress', doneCount + ' / ' + course.length);
+    progText.id = 'progress-' + row.gid;
+    prog.appendChild(progText);
+    tr.appendChild(prog);
+
+    gridBody.appendChild(tr);
+  });
+
+  setText(lastUpdate, formatTime(new Date()));
+}
+
+// 원본은 눌렀을 때만 읽는다. 구독은 썸네일(photoMeta)까지만 한다.
+async function openFull(gid, locIndex, locName) {
+  fullCard.hidden = false;
+  setText(fullCaption, Number(gid) + '모둠 · ' + locName + ' 원본');
+  setText(fullMsg, '원본을 불러오는 중');
+  try {
+    const photo = await db.getPhoto(gid, locIndex);
+    if (!photo || !photo.full) {
+      fullPreview.removeAttribute('src');
+      setText(fullMsg, '원본을 찾지 못했습니다.');
+      return;
+    }
+    fullPreview.src = 'data:' + photo.mime + ';base64,' + photo.full;
+    setText(fullMsg, '원본 1건을 읽었습니다.');
+  } catch (e) {
+    setText(fullMsg, e && e.message ? e.message : '원본을 불러오지 못했습니다.');
+  }
+}
+
+document.getElementById('full-close').addEventListener('click', function () {
+  fullCard.hidden = true;
+  fullPreview.removeAttribute('src');
+  setText(fullMsg, '');
+});
+
+// ── 구독 ──────────────────────────────────────────────────────────────────
+function subscribe(classId) {
+  if (unsubscribe) unsubscribe();
+  currentClassId = classId;
+  setText(document.getElementById('class-name'), (classLabels[classId] || classId) + ' 진행 현황');
+  unsubscribe = db.onDashboard(classId, render);
+}
+
+// 데모 모드에서는 다른 탭(학생·관리 화면)의 쓰기를 storage 이벤트로 받아 다시 그린다.
+// 서버 모드에서는 onDashboard의 Firestore 구독이 실시간 갱신을 담당한다.
+window.addEventListener('storage', function (e) {
+  if (MODE === 'demo' && e.key === 'dku:demo' && currentClassId) subscribe(currentClassId);
+});
+
+function openDashboard(classId) {
+  loginCard.hidden = true;
+  dashboard.hidden = false;
+  nav.hidden = false;
+  subscribe(classId);
+}
+
+// ── 로그인 ────────────────────────────────────────────────────────────────
+loginForm.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  showLoginError('');
+  loginBtn.disabled = true;
+  const classId = classSelect.value;
+  const email = emailInput.value.trim().toLowerCase();
+  const password = passwordInput.value;
+  try {
+    await db.ensureReady();
+    if (MODE === 'firebase') {
+      // db.js가 이미 만들어 둔 Auth 인스턴스를 그대로 쓴다(모둠 계정 로그인과 같은 프로젝트).
+      await db.sdk.auth.signInWithEmailAndPassword(db.auth, email, password);
+      // getPhoto가 반 경로를 알아야 하므로 반 식별자만 세션에 남긴다.
+      db.session = { classId: classId, gid: null, groupNo: null, email: email };
+    } else if (email !== DEMO_TEACHER_EMAIL || password !== DEMO_TEACHER_PASSWORD) {
+      throw new Error('교사 이메일 또는 비밀번호가 맞지 않습니다');
+    }
+    localStorage.setItem(TEACHER_KEY, JSON.stringify({ email: email, classId: classId }));
+    openDashboard(classId);
+  } catch (err) {
+    showLoginError(err && err.message ? err.message : '로그인하지 못했습니다');
+    passwordInput.value = '';
+  } finally {
+    loginBtn.disabled = false;
+  }
+});
+
+document.getElementById('teacher-logout').addEventListener('click', async function () {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  localStorage.removeItem(TEACHER_KEY);
+  if (MODE === 'firebase') {
+    try { await db.logout(); } catch (ignored) { /* 이미 끊긴 세션 */ }
+  }
+  location.reload();
+});
+
+// ── 시작 ──────────────────────────────────────────────────────────────────
+(async function start() {
+  try {
+    await db.ensureReady();
+  } catch (e) {
+    showLoginError(e && e.message ? e.message : '앱을 시작하지 못했습니다');
+    return;
+  }
+  // 같은 기기에서 이미 로그인한 교사는 바로 대시보드를 연다.
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(TEACHER_KEY)); } catch (e) { saved = null; }
+  if (saved && saved.classId && classIds.indexOf(saved.classId) >= 0) {
+    classSelect.value = saved.classId;
+    // 서버 모드에서는 Auth persistence(local)가 세션을 되살린다. getPhoto가 쓸 반 식별자만 다시 채운다.
+    if (MODE === 'firebase') {
+      db.session = { classId: saved.classId, gid: null, groupNo: null, email: saved.email };
+    }
+    openDashboard(saved.classId);
+  }
+})();
+</script>
+</body>
+</html>

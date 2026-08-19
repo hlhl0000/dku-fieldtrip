@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>미션 — 단국대 현장체험학습</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* 이 화면 전용 규칙만 둔다(공용 규칙은 css/style.css). v3.2 확정 25-⑴ 미전송 배지. */
+  .unsent-badge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 2px solid #d98a00;
+    border-radius: 10px;
+    background: #fff6e5;
+    color: #5a3d00;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+  .unsent-badge > span { flex: 1 1 auto; min-width: 0; }
+  .unsent-badge > button { flex: 0 0 auto; }
+</style>
+</head>
+<body class="page-mission">
+<main id="app">
+  <header class="app-header">
+    <h1 id="group-title">모둠 미션</h1>
+    <p class="sub"><span id="course-count">진행 0 / 0</span> · 마지막 동기화 <span id="last-sync">없음</span></p>
+  </header>
+
+  <!-- 미전송 건수 상시 배지 (확정 25-⑴). 전송 대기·전송 오류를 합친 수이며,
+       0건이면 사라진다. 「완료」로 뭉뚱그리지 않는다(§5 금지 19). -->
+  <div id="unsent-badge" class="unsent-badge" role="status" hidden>
+    <span id="unsent-text"></span>
+    <button id="unsent-retry" type="button" class="secondary">다시 전송</button>
+  </div>
+
+  <p id="notice" class="error" role="alert" hidden></p>
+  <p id="offline-note" class="note offline-note" hidden>지금 오프라인입니다. 사진은 기기에 보관되고, 연결되면 자동으로 전송됩니다.</p>
+
+  <ul id="loc-list" class="loc-list"></ul>
+
+  <section class="card">
+    <a id="fourcut-link" class="link-button" href="fourcut.html">인생네컷 만들기</a>
+    <p class="note" id="fourcut-hint"></p>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">기기 정리</h2>
+    <p class="note">행사가 끝난 뒤 이 기기에 남은 사진과 앱 데이터를 지웁니다.
+      앱 내 정리는 논리 삭제이며 복구 불가능한 소거가 아닙니다. 확실히 지우려면 이어서 브라우저의 사이트 데이터 삭제를 하세요.</p>
+    <div class="button-row">
+      <button id="logout-btn" type="button" class="secondary">로그아웃</button>
+      <button id="wipe-btn" type="button" class="secondary">내 기기 데이터 지우기</button>
+    </div>
+    <p id="wipe-result" class="note" role="status"></p>
+    <div id="wipe-confirm" class="confirm-box" hidden>
+      <p id="wipe-confirm-text" class="error"></p>
+      <p class="note">그래도 지우면 전송되지 않은 사진은 되살릴 수 없습니다.</p>
+      <div class="button-row">
+        <button id="wipe-cancel" type="button" class="secondary">취소</button>
+        <button id="wipe-force" type="button">알겠습니다. 그래도 지웁니다</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { db, statusOf, computeCurrentLocIndex, progressCount, unsentKeys } from './js/db.js';
+import { renderInitError, renderPersistenceBanner } from './js/firebase-config.js';
+import { compressPhoto } from './js/compress.js';
+import {
+  requireLogin, clearSession, statusText, CURRENT_TEXT, STATUS_TEXT,
+  setText, el, clear, formatTime, markBusy, markIdle,
+  registerServiceWorker, clearAppShellAndStorage, doneKey
+} from './js/common.js';
+
+const session = requireLogin();
+const app = document.getElementById('app');
+const list = document.getElementById('loc-list');
+const notice = document.getElementById('notice');
+const offlineNote = document.getElementById('offline-note');
+const lastSyncEl = document.getElementById('last-sync');
+const countEl = document.getElementById('course-count');
+const fourcutLink = document.getElementById('fourcut-link');
+const fourcutHint = document.getElementById('fourcut-hint');
+const unsentBadge = document.getElementById('unsent-badge');
+const unsentText = document.getElementById('unsent-text');
+
+registerServiceWorker();
+
+let state = null;
+const busyLoc = {};                 // 업로드 중인 장소
+const opIds = {};                   // 장소별 operationId — 재시도·새로고침에도 재사용
+
+function showNotice(text) {
+  setText(notice, text);
+  notice.hidden = !text;
+}
+
+function operationIdFor(locIndex) {
+  const key = 'dku:op:' + session.classId + '/' + session.gid + '/' + locIndex;
+  let v = opIds[locIndex] || localStorage.getItem(key);
+  if (!v) {
+    v = 'op-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem(key, v);
+  }
+  opIds[locIndex] = v;
+  return v;
+}
+
+function clearOperationId(locIndex) {
+  localStorage.removeItem('dku:op:' + session.classId + '/' + session.gid + '/' + locIndex);
+  delete opIds[locIndex];
+}
+
+function badgeFor(st) {
+  if (st === 'current') {
+    return el('span', 'badge badge-current', CURRENT_TEXT);
+  }
+  return el('span', 'badge badge-' + st, statusText(st));
+}
+
+function render() {
+  if (!state) return;
+  clear(list);
+  const current = computeCurrentLocIndex(state);
+  const total = (state.course || []).length;
+  // 진행 수 = done ∪ pending ∪ error 3집합의 합집합 크기(확정 23-⑴).
+  // 같은 locIndex가 여러 집합에 겹칠 수 있으므로 더하지 않고 합집합으로 센다.
+  // 계산은 db.js의 progressCount 하나만 쓴다 — 해금 계산과 같은 원천이다(F-1).
+  const doneCount = progressCount(state);
+
+  // 화면에는 로그인 입력과 같은 형태(선행 0 없는 번호)로 보여 준다.
+  setText(document.getElementById('group-title'), Number(state.groupNo) + '모둠 미션');
+  setText(countEl, '진행 ' + doneCount + ' / ' + total);
+  setText(lastSyncEl, formatTime(state.lastSyncAt));
+
+  (state.course || []).forEach(function (loc) {
+    const st = statusOf(state, loc.locIndex);
+    const card = el('li', 'loc-card loc-' + st);
+    card.setAttribute('data-loc', String(loc.locIndex));
+    card.setAttribute('data-status', st);
+
+    const head = el('div', 'loc-head');
+    head.appendChild(el('span', 'loc-name', (loc.locIndex + 1) + '. ' + loc.name));
+    const badge = badgeFor(st);
+    badge.id = 'badge-' + loc.locIndex;
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    if (st === 'locked') {
+      card.appendChild(el('p', 'loc-mission locked-text', '앞 장소를 마치면 열립니다.'));
+      list.appendChild(card);
+      return;
+    }
+
+    card.appendChild(el('p', 'loc-mission', loc.mission));
+    card.appendChild(el('p', 'fixed-note', '모둠원 전원이 보이는 단체사진'));
+
+    const thumb = document.createElement('img');
+    thumb.id = 'thumb-' + loc.locIndex;
+    thumb.className = 'loc-thumb';
+    thumb.alt = loc.name + ' 인증사진';
+    thumb.hidden = true;
+    card.appendChild(thumb);
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.id = 'file-' + loc.locIndex;
+    input.className = 'loc-file';
+    input.setAttribute('capture', 'environment');
+    input.addEventListener('change', function () { onPick(loc.locIndex, input); });
+    card.appendChild(input);
+
+    // 오류 상태에서도 다음 장소는 이미 열려 있다(확정 23-⑴). 그래서 오류 카드의 안내는
+    // 「올리면 열린다」가 아니라 재시도·교체 두 길을 알려 준다(확정 23-⑵).
+    let hintText;
+    if (st === 'error') {
+      hintText = '사진은 이 기기에 보관되어 있습니다. 「다시 전송」을 누르거나, 새 사진을 올려 바꿀 수 있습니다. 다음 장소는 이미 열려 있습니다.';
+    } else if (st === 'synced' || st === 'queued') {
+      hintText = '다시 올리면 이 장소의 사진이 새 사진으로 바뀝니다.';
+    } else {
+      hintText = '사진을 올리면 다음 장소가 열립니다.';
+    }
+    const hint = el('p', 'note loc-hint', hintText);
+    hint.id = 'hint-' + loc.locIndex;
+    card.appendChild(hint);
+
+    const status = el('p', 'note loc-status');
+    status.id = 'status-' + loc.locIndex;
+    card.appendChild(status);
+
+    if (st === 'error') {
+      const retry = el('button', '', '다시 전송');
+      retry.type = 'button';
+      retry.id = 'retry-' + loc.locIndex;
+      retry.addEventListener('click', function () { onRetry(loc.locIndex); });
+      card.appendChild(retry);
+    }
+
+    list.appendChild(card);
+  });
+
+  const usable = doneCount;
+  fourcutHint.textContent = usable >= 4
+    ? '사진 ' + usable + '장 중 4장을 골라 만듭니다.'
+    : '장소 4곳을 마치면 만들 수 있습니다. 지금 ' + usable + '곳.';
+  if (usable >= 4) {
+    fourcutLink.removeAttribute('aria-disabled');
+    fourcutLink.classList.remove('disabled');
+  } else {
+    fourcutLink.setAttribute('aria-disabled', 'true');
+    fourcutLink.classList.add('disabled');
+  }
+
+  paintUnsent();
+  paintThumbs();
+}
+
+// 미전송(전송 대기 + 전송 오류) 건수 상시 배지 (확정 25-⑴).
+// 오류·대기가 해금을 막지 않으므로, 서버에 아무것도 없는 채로 코스를 끝낼 수 있다.
+// 그 상태를 학생·교사가 알아차리게 하는 장치다. 0건이면 배지 자체가 사라진다.
+function paintUnsent() {
+  const n = unsentKeys(state).size;
+  unsentBadge.hidden = n === 0;
+  setText(unsentText, '전송되지 않은 사진 ' + n + '장 — 신호가 잡히면 자동 전송됩니다');
+}
+
+// 저장된 사진 미리보기를 붙인다.
+async function paintThumbs() {
+  const photos = await db.listMyPhotos();
+  photos.forEach(function (p) {
+    const img = document.getElementById('thumb-' + p.locIndex);
+    if (!img) return;
+    img.src = 'data:' + p.mime + ';base64,' + p.full;
+    img.hidden = false;
+  });
+}
+
+async function onPick(locIndex, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (busyLoc[locIndex]) return;
+  busyLoc[locIndex] = true;
+  markBusy();
+  showNotice('');
+  const statusEl = document.getElementById('status-' + locIndex);
+  const setStage = function (t) { if (statusEl) setText(statusEl, t); };
+
+  try {
+    const out = await compressPhoto(file, setStage);
+    setStage('사진을 보내는 중');
+    // 오류 상태에서 새 사진을 고른 것은 재시도가 아니라 **교체**다. 내용이 다른 제출이므로
+    // 멱등 키(operationId)를 새로 뽑는다(확정 23-⑵). 같은 사진의 「다시 전송」은
+    // onRetry가 보관함의 opId를 그대로 쓴다.
+    if (state && statusOf(state, locIndex) === 'error') clearOperationId(locIndex);
+    const res = await db.completeLocation(locIndex, out.full, out.thumb, out.mime, operationIdFor(locIndex));
+    if (res.status === 'synced') {
+      clearOperationId(locIndex);
+      setStage(STATUS_TEXT.synced);
+    } else if (res.status === 'queued') {
+      setStage(STATUS_TEXT.queued);
+    } else {
+      setStage(STATUS_TEXT.error);
+    }
+    state = await db.getState();
+    render();
+  } catch (err) {
+    showNotice(err && err.message ? err.message : '사진을 올리지 못했습니다');
+    setStage('');
+  } finally {
+    input.value = '';
+    delete busyLoc[locIndex];
+    markIdle();
+  }
+}
+
+async function onRetry(locIndex) {
+  if (busyLoc[locIndex]) return;
+  busyLoc[locIndex] = true;
+  markBusy();
+  showNotice('');
+  const statusEl = document.getElementById('status-' + locIndex);
+  try {
+    setText(statusEl, '다시 보내는 중');
+    const res = await db.retryFailed(locIndex);
+    if (res.status === 'synced') clearOperationId(locIndex);
+    state = await db.getState();
+    render();
+    const after = document.getElementById('status-' + locIndex);
+    // 성공하면 배지가 이미 상태를 말한다. 여기서 같은 문구를 또 쓰면 카드에 두 번 표시되므로 비운다.
+    if (after) setText(after, res.status === 'synced' ? '' : (STATUS_TEXT[res.status] || ''));
+  } catch (err) {
+    showNotice(err && err.message ? err.message : '다시 보내지 못했습니다');
+  } finally {
+    delete busyLoc[locIndex];
+    markIdle();
+  }
+}
+
+// 배지의 「다시 전송」 — 실패 보관함에 남은 것을 장소 순서대로 다시 보낸다.
+// 전송 대기분에는 손대지 않는다. 대기의 전송 주체는 Firestore mutation queue 하나뿐이고
+// 별도 재전송 큐를 만들지 않는다(확정 20 · §5 금지 14).
+async function onRetryAll() {
+  markBusy();
+  showNotice('');
+  try {
+    const rows = await db.listFailed();
+    // 보관함이 비었는데 배지가 떠 있다면 남은 것은 전송 대기뿐이다(S검토 B-11).
+    // 버튼이 아무 일도 하지 않은 채 침묵하면 학생은 고장으로, 교사는 보내진 것으로 오인한다.
+    if (rows.length === 0) {
+      // 상태 문구는 common.js가 단일 원천이다(확정 22). 여기서 다시 타이핑하지 않는다.
+      showNotice('지금 남은 것은 「' + STATUS_TEXT.queued + '」뿐입니다. 신호가 잡히면 자동으로 전송됩니다');
+      return;
+    }
+    const order = rows.map(function (r) { return r.locIndex; }).sort(function (a, b) { return a - b; });
+    for (const i of order) {
+      try {
+        const res = await db.retryFailed(i);
+        if (res.status === 'synced') clearOperationId(i);
+      } catch (e) { /* 한 장이 실패해도 나머지는 계속 보낸다 */ }
+    }
+    state = await db.getState();
+    render();
+  } catch (err) {
+    showNotice(err && err.message ? err.message : '다시 보내지 못했습니다');
+  } finally {
+    markIdle();
+  }
+}
+
+document.getElementById('unsent-retry').addEventListener('click', onRetryAll);
+
+// ── 기기 정리 (선행 가드 → 2단계 확인) ─────────────────────────────────────
+const wipeBtn = document.getElementById('wipe-btn');
+const wipeResult = document.getElementById('wipe-result');
+const wipeConfirm = document.getElementById('wipe-confirm');
+const wipeConfirmText = document.getElementById('wipe-confirm-text');
+
+async function doWipe(force) {
+  const res = await db.wipeLocalData({ force: force });
+  if (!res.ok) {
+    setText(wipeConfirmText, res.message);
+    wipeConfirm.hidden = false;
+    setText(wipeResult, '');
+    return;
+  }
+  wipeConfirm.hidden = true;
+  await clearAppShellAndStorage();
+  clearSession();
+  setText(wipeResult, res.message + ' 이어서 브라우저 설정에서 사이트 데이터 삭제까지 해 주세요.');
+  setTimeout(function () { location.replace('index.html'); }, 1200);
+}
+
+wipeBtn.addEventListener('click', function () { doWipe(false); });
+document.getElementById('wipe-force').addEventListener('click', function () { doWipe(true); });
+document.getElementById('wipe-cancel').addEventListener('click', function () {
+  wipeConfirm.hidden = true;
+  setText(wipeResult, '지우지 않았습니다.');
+});
+
+document.getElementById('logout-btn').addEventListener('click', async function () {
+  await db.logout();
+  clearSession();
+  location.replace('index.html');
+});
+
+// ── 연결 상태 표시 ────────────────────────────────────────────────────────
+function paintOnline() {
+  offlineNote.hidden = navigator.onLine;
+}
+window.addEventListener('online', async function () {
+  paintOnline();
+  state = await db.getState();
+  render();
+});
+window.addEventListener('offline', paintOnline);
+
+// 코스 판(courseRev)이 어긋난 채 자가 재캐시도 실패한 상태만 안내한다.
+// 재캐시에 성공하면(무중단 자가 복구) 아무것도 뜨지 않는다.
+function noticeIfRevMismatch(next) {
+  const mismatch = (next && next.revMismatch) || (db.getCachedCourse() || {}).revMismatch;
+  if (mismatch) showNotice('코스가 변경되었습니다. 로그아웃 후 다시 로그인하세요.');
+}
+
+// ── 시작 ──────────────────────────────────────────────────────────────────
+(async function start() {
+  // firebase 모드에서는 여기서 SDK·Auth·Firestore가 준비된다. 이 화면은 아침 사전 로그인
+  // 이후 학생이 직접 재진입·새로고침하는 유일한 화면이라 index를 거치지 않는 진입이 정상 경로다.
+  // 오류 화면 2분기는 index.html의 boot()와 같은 형태를 쓴다(§2-8).
+  let ready = null;
+  try {
+    ready = await db.ensureReady();
+  } catch (e) {
+    if (e && e.kind === 'persistence') {
+      renderInitError(app, {
+        kind: 'persistence',
+        detail: e.message,
+        onRetry: function () { location.reload(); },
+        onMemoryCache: function () {
+          localStorage.setItem('dku:memoryCache', '1');
+          location.reload();
+        }
+      });
+    } else {
+      renderInitError(app, {
+        kind: 'fatal',
+        detail: e && e.message ? e.message : String(e),
+        onRetry: function () { location.reload(); }
+      });
+    }
+    return;
+  }
+  // 지속 캐시를 양성 확인하지 못했으면 오류 화면 대신 상시 배너를 띄운다(앱은 계속 쓴다).
+  if (ready && ready.offlineProtection === false) renderPersistenceBanner(app);
+
+  try {
+    // 새로고침·새 탭에서도 저장된 세션으로 다시 붙는다.
+    if (!db.session) {
+      db.session = {
+        classId: session.classId, gid: session.gid,
+        groupNo: session.groupNo, courseRev: session.courseRev
+      };
+    }
+    noticeIfRevMismatch(null);
+    state = await db.getState();
+    if (!state) {
+      location.replace('index.html');
+      return;
+    }
+    noticeIfRevMismatch(state);
+    paintOnline();
+    render();
+    db.onGroup(function (next) {
+      state = next;
+      noticeIfRevMismatch(next);
+      render();
+    });
+  } catch (e) {
+    showNotice(e && e.message ? e.message : '화면을 불러오지 못했습니다');
+  }
+})();
+</script>
+</body>
+</html>

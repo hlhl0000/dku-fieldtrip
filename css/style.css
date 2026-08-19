@@ -1,0 +1,294 @@
+/* style.css — 공통 스타일.
+   설계지시안 v3.1 §2-6. 뷰포트 320 / 390 / 768 에서 가로 스크롤이 생기지 않아야 한다.
+   외부 폰트·외부 CSS를 불러오지 않는다(§5 금지 2). */
+
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --ink: #1c1f24;
+  --ink-weak: #5b636e;
+  --line: #d9dde3;
+  --accent: #1f5fbf;
+  --accent-ink: #ffffff;
+  --ok: #1c7c4a;
+  --wait: #a06a00;
+  --fail: #b3261e;
+  --lock: #8b929c;
+  --radius: 12px;
+  --gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+/* hidden 속성은 어떤 display 규칙보다 우선한다 */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 12px 48px;
+}
+
+img, canvas, video { max-width: 100%; height: auto; }
+
+.app-header { padding: 8px 4px 16px; }
+.app-header h1 { margin: 0; font-size: 20px; line-height: 1.3; }
+.app-header .sub { margin: 4px 0 0; color: var(--ink-weak); font-size: 14px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: var(--gap);
+}
+
+.note {
+  color: var(--ink-weak);
+  font-size: 13px;
+  padding: 8px 4px;
+}
+
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+input, select, button, textarea {
+  font: inherit;
+  width: 100%;
+  max-width: 100%;
+}
+
+input, select, textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+}
+
+button {
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #fff;
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--fail);
+  font-size: 14px;
+  margin: 0 0 12px;
+  word-break: keep-all;
+}
+
+/* 오프라인 보호 꺼짐 상시 배너 — 오류 화면이 아니라 화면 맨 위에 계속 남는 알림이다. */
+.offline-warning {
+  border: 1px solid var(--fail);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+/* 상태 배지 4종 — 문구는 common.js의 STATUS_TEXT가 단일 원천이다(확정 22). */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-synced { background: #e3f3ea; color: var(--ok); }
+.badge-queued { background: #fbf0d9; color: var(--wait); }
+.badge-error  { background: #fdeae8; color: var(--fail); }
+.badge-locked { background: #eef0f3; color: var(--lock); }
+.badge-current { background: #e6eefa; color: var(--accent); }
+
+/* 초기화 실패 화면 (§2-8) */
+.init-error {
+  background: var(--card);
+  border: 1px solid var(--fail);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.init-error h2 { margin: 0 0 8px; font-size: 18px; }
+.init-error p { margin: 0 0 8px; font-size: 14px; word-break: keep-all; }
+.init-error-detail { color: var(--ink-weak); font-size: 12px; }
+.init-error-warn { color: var(--wait); font-size: 13px; }
+.init-error-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.init-error-actions button { width: auto; flex: 1 1 140px; }
+
+/* ── 미션 화면 ─────────────────────────────────────────────────────────── */
+.loc-list {
+  list-style: none;
+  margin: 0 0 var(--gap);
+  padding: 0;
+}
+
+.loc-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: var(--gap);
+}
+.loc-card.loc-current { border-color: var(--accent); }
+.loc-card.loc-error { border-color: var(--fail); }
+.loc-card.loc-locked { opacity: 0.72; }
+
+.loc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.loc-name { font-weight: 700; word-break: keep-all; }
+
+.loc-mission {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--ink-weak);
+  word-break: keep-all;
+}
+.locked-text { color: var(--lock); }
+
+.fixed-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: #eef2f8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.loc-thumb {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.loc-file { margin-bottom: 8px; }
+.loc-hint, .loc-status { margin: 0 0 8px; padding: 0; font-size: 13px; }
+.loc-status { color: var(--ink-weak); min-height: 1em; }
+
+.offline-note {
+  background: #fbf0d9;
+  color: var(--wait);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.section-title { margin: 0 0 8px; font-size: 16px; }
+
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.button-row button { width: auto; flex: 1 1 140px; }
+
+.confirm-box {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--fail);
+  border-radius: 8px;
+}
+
+.link-button {
+  display: block;
+  text-align: center;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-button.disabled {
+  background: #fff;
+  color: var(--lock);
+  border-color: var(--line);
+  pointer-events: none;
+}
+
+/* ── 네컷 화면 ─────────────────────────────────────────────────────────── */
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.pick-item {
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  background: var(--card);
+  cursor: pointer;
+}
+.pick-item.selected { border-color: var(--accent); background: #eef2fb; }
+.pick-item.disabled { opacity: 0.45; cursor: not-allowed; }
+.pick-item img { display: block; width: 100%; border-radius: 6px; }
+.pick-item .pick-label { font-size: 12px; margin-top: 4px; word-break: keep-all; }
+.pick-item .pick-order {
+  display: inline-block;
+  min-width: 20px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+#fourcut-preview {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  margin: 0 auto 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.frame-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.frame-row button { width: auto; flex: 1 1 140px; }
+.frame-row button[aria-pressed="true"] { outline: 2px solid var(--accent); }
+
+@media (min-width: 768px) {
+  #app { padding: 24px 16px 64px; }
+  .app-header h1 { font-size: 24px; }
+}

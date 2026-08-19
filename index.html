@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>모둠 로그인 — 단국대 현장체험학습</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="page-login">
+<main id="app">
+  <header class="app-header">
+    <h1>단국대 현장체험학습</h1>
+    <p class="sub">모둠 미션 · 인생네컷</p>
+  </header>
+
+  <section id="login-card" class="card">
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="class-select">반</label>
+        <select id="class-select" name="classId" required></select>
+      </div>
+
+      <div class="field">
+        <label for="group-input">모둠 번호</label>
+        <input id="group-input" name="groupNo" type="text" inputmode="numeric"
+               autocomplete="off" placeholder="예: 1" required>
+      </div>
+
+      <div class="field">
+        <label for="password-input">비밀번호</label>
+        <input id="password-input" name="password" type="password"
+               autocomplete="current-password" required>
+      </div>
+
+      <p id="login-error" class="error" role="alert" hidden></p>
+
+      <button id="login-submit" type="submit">시작하기</button>
+    </form>
+  </section>
+
+  <section id="mode-note" class="note">
+    <p id="mode-text"></p>
+  </section>
+</main>
+
+<script type="module">
+import { MODE, renderInitError, renderPersistenceBanner } from './js/firebase-config.js';
+import { db } from './js/db.js';
+import { classOptions, saveSession, setText, registerServiceWorker, loadSession } from './js/common.js';
+
+const app = document.getElementById('app');
+const form = document.getElementById('login-form');
+const classSelect = document.getElementById('class-select');
+const groupInput = document.getElementById('group-input');
+const passwordInput = document.getElementById('password-input');
+const errorBox = document.getElementById('login-error');
+const submitBtn = document.getElementById('login-submit');
+
+// 반 목록은 firebase-config.js의 상수 배열에서 채운다.
+// 인증 전에 서버를 읽지 않는다(v3.1 §1-3 · §5 금지 9).
+classOptions().forEach(function (opt) {
+  const o = document.createElement('option');
+  o.value = opt.id;
+  o.textContent = opt.label;
+  classSelect.appendChild(o);
+});
+
+setText(document.getElementById('mode-text'),
+  MODE === 'demo'
+    ? '지금은 데모 모드입니다. 이 기기 안에서만 동작하며 서버로 아무것도 보내지 않습니다.'
+    : '서버 모드입니다.');
+
+function showError(message) {
+  setText(errorBox, message);
+  errorBox.hidden = false;
+}
+
+function hideError() {
+  errorBox.hidden = true;
+  setText(errorBox, '');
+}
+
+// 앱 셸을 캐시해 둔다. 행사 아침에 온라인으로 한 번 열어 두는 것이 운영 전제다.
+registerServiceWorker();
+
+// 시작 준비. 지속 캐시(IndexedDB) 초기화가 막히면 원인과 선택지를 함께 보여 준다(§2-8).
+// 실패해도 데모 모드로 자동 전환하지 않는다(§5 금지 10).
+(async function boot() {
+  let ready = null;
+  try {
+    ready = await db.ensureReady();
+  } catch (e) {
+    if (e && e.kind === 'persistence') {
+      renderInitError(app, {
+        kind: 'persistence',
+        detail: e.message,
+        onRetry: function () { location.reload(); },
+        onMemoryCache: function () {
+          localStorage.setItem('dku:memoryCache', '1');
+          location.reload();
+        }
+      });
+    } else {
+      renderInitError(app, {
+        kind: 'fatal',
+        detail: e && e.message ? e.message : String(e),
+        onRetry: function () { location.reload(); }
+      });
+    }
+    return;
+  }
+  // 지속 캐시를 양성 확인하지 못했으면 오류 화면이 아니라 상시 배너를 띄운다(§2-8 · A-4).
+  if (ready && ready.offlineProtection === false) renderPersistenceBanner(app);
+  // 이미 로그인한 기기는 바로 미션 화면으로 보낸다.
+  const s = loadSession();
+  if (s && s.classId && s.gid) location.replace('mission.html');
+})();
+
+form.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideError();
+  submitBtn.disabled = true;
+  try {
+    const session = await db.login(
+      classSelect.value,
+      groupInput.value,
+      passwordInput.value
+    );
+    saveSession({
+      classId: session.classId,
+      gid: session.gid,
+      groupNo: session.groupNo,
+      courseRev: session.courseRev
+    });
+    location.href = 'mission.html';
+  } catch (err) {
+    showError(err && err.message ? err.message : '로그인하지 못했습니다');
+    passwordInput.value = '';
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
