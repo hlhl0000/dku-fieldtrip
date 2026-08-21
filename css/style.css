@@ -292,3 +292,29 @@ button:disabled {
   #app { padding: 24px 16px 64px; }
   .app-header h1 { font-size: 24px; }
 }
+
+/* 대시보드 칸의 전송 시각 (v3.3 확정 30) */
+.cell-time {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: #555;
+}
+
+/* 코스 복사 줄 · 프레임 이미지 설정 (v3.3 확정 26·27) */
+.copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.copy-row label { flex: 0 0 auto; font-weight: 600; }
+.copy-row select { flex: 1 1 12em; min-width: 0; }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.check-row input[type="checkbox"] { flex: 0 0 auto; width: auto; }

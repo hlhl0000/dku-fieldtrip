@@ -166,7 +166,8 @@ setText(document.getElementById('delay-note'),
   '」로 남고 이 화면에는 아직 보이지 않습니다. 두 경우 모두 학생 화면에서는 다음 장소가 열려 진행이 계속되므로, ' +
   '이 화면이 비어 있다고 그 모둠이 멈춘 것은 아닙니다. 이 화면의 「' + STATUS_TEXT.synced +
   '」는 서버가 받은 것만 뜻합니다. 연결이 돌아오면 몇 초 안에 채워집니다. ' +
-  '계속 비어 있는 모둠은 만났을 때 미션 화면 맨 위의 「다시 전송」을 눌러 보게 하세요.');
+  '계속 비어 있는 모둠은 만났을 때 미션 화면 맨 위의 「다시 전송」을 눌러 보게 하세요. ' +
+  '칸에 적힌 시각은 서버가 사진을 받은 「전송 시각」입니다. 학생이 사진을 찍은 시각과는 다를 수 있습니다.');
 
 classOptions().forEach(function (opt) {
   const o = document.createElement('option');
@@ -177,6 +178,27 @@ classOptions().forEach(function (opt) {
 
 let unsubscribe = null;
 let currentClassId = null;
+
+// ── 전송 시각 (v3.3 확정 30 · §5 금지 24) ─────────────────────────────────
+// 여기 뜨는 시각은 **서버가 사진을 받은 시각**이다. 학생이 사진을 찍은 시각이 아니다 —
+// 오프라인에서 찍어 두었다가 나중에 전송되면 둘은 실제로 다르다. 그래서 라벨에 「전송」을
+// 박아 둔다. serverTimestamp()는 서버가 확정하기 전 로컬 스냅샷에서 null이므로, 그때는
+// 기기 시계로 메우지 않고 확인 중이라고 적는다(§5 금지 6 — 클라이언트 시계 단독 사용 금지).
+function toDateSafe(v) {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') {
+    try { return v.toDate(); } catch (e) { return null; }
+  }
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function uploadTimeText(value) {
+  const d = toDateSafe(value);
+  if (!d) return '전송 시각 확인 중';
+  const p = function (n) { return ('0' + n).slice(-2); };
+  return '전송 ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 
 function showLoginError(text) {
   setText(loginError, text);
@@ -245,6 +267,14 @@ function render(rows) {
       btn.appendChild(badge);
       btn.appendChild(el('span', 'cell-loc', course[i].name));
 
+      // 사진이 실제로 서버에 있는 칸에만 시각을 붙인다. 사진이 없는 칸에 시각을 적으면
+      // 「무언가 전송됐다」로 읽힌다.
+      if (t && t.thumb) {
+        const time = el('span', 'cell-time', uploadTimeText(t.uploadedAt));
+        time.id = 'time-' + row.gid + '-' + i;
+        btn.appendChild(time);
+      }
+
       if (t && t.thumb) {
         btn.addEventListener('click', function () { openFull(row.gid, i, course[i].name); });
       }
@@ -277,7 +307,7 @@ async function openFull(gid, locIndex, locName) {
       return;
     }
     fullPreview.src = 'data:' + photo.mime + ';base64,' + photo.full;
-    setText(fullMsg, '원본 1건을 읽었습니다.');
+    setText(fullMsg, '원본 1건을 읽었습니다. ' + uploadTimeText(photo.createdAt || photo.uploadedAt) + '.');
   } catch (e) {
     setText(fullMsg, e && e.message ? e.message : '원본을 불러오지 못했습니다.');
   }

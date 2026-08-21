@@ -104,7 +104,9 @@ import {
   composeFourcut, fileNameFor, OUTPUT,
   CELL, ADJUST, cellRect, newAdjust
 } from './js/fourcut.js';
-import { FRAMES, DEFAULT_FRAME_TEXTS } from './frames/frames.js';
+import {
+  FRAMES, DEFAULT_FRAME_TEXTS, frameById, frameLayoutOf, cellBoxOf
+} from './frames/frames.js';
 import {
   requireLogin, setText, el, clear, registerServiceWorker, statusText
 } from './js/common.js';
@@ -133,6 +135,31 @@ const adjustByLoc = {};     // locIndex → 조정값. 선택을 껐다 켜도 �
 let adjustCells = [];       // 지금 그려진 조정 칸 4개의 DOM·상태
 let frameId = FRAMES[0].id;
 let frameTexts = DEFAULT_FRAME_TEXTS;
+// 프레임별 설정(좌표판·문구 숨김)과 업로드된 이미지. 교사가 관리 화면에서 정한 것이다(확정 27).
+let frameMeta = {};        // frameId → {layoutId, hideTexts, ...}
+const assetCache = {};     // frameId → {background?, overlay?} 이미지 본문. 한 번만 읽는다.
+
+// 지금 고른 프레임이 실제로 쓸 것들. 화면(미리보기 상자)과 합성이 같은 값을 본다(확정 29-⑸).
+function frameOptionsFor(id) {
+  const e = frameMeta[id] || {};
+  return { layoutId: e.layoutId || null, hideTexts: e.hideTexts === true };
+}
+function currentFrame() { return frameById(frameId); }
+function currentBox(n) { return cellBoxOf(currentFrame(), frameOptionsFor(frameId), n); }
+
+// 이미지 본문은 고른 프레임의 것만, 한 번만 읽는다. 못 읽으면 색 프레임으로 계속 간다
+// (오프라인 첫 진입 — 네컷 만들기 자체를 막지 않는다).
+async function frameAssetsFor(id) {
+  if (assetCache[id]) return assetCache[id];
+  let got = {};
+  try {
+    got = (await db.getFrameAssetImages(id)) || {};
+  } catch (e) {
+    got = {};
+  }
+  assetCache[id] = got;
+  return got;
+}
 let lastResult = null;      // 마지막으로 성공한 {blob, dataUrl} — 실패해도 버리지 않는다
 let lastObjectUrl = null;
 
@@ -151,6 +178,9 @@ function renderFrames() {
     b.addEventListener('click', function () {
       frameId = f.id;
       renderFrames();
+      // 프레임마다 칸 비율이 다를 수 있다(확정 29). 미리보기 상자를 새 비율로 다시 그린다.
+      adjustCells.forEach(function (c) { paintCell(c); });
+      frameAssetsFor(f.id);   // 미리 읽어 둔다(합성 때 기다리지 않게)
     });
     frameRow.appendChild(b);
   });
@@ -201,23 +231,26 @@ function renderPicks() {
 
 // ── 셀별 자를 범위 조정 (확정 24) ─────────────────────────────────────────
 
-// 사진의 실픽셀을 읽는다. 셀(640×480)보다 작은지가 자동 모드 판정의 기준이다(확정 24-⑶).
+// 사진의 실픽셀을 읽는다. 그 **칸**보다 작은지가 자동 모드 판정의 기준이다(확정 24-⑶).
+// 칸 크기는 프레임의 좌표판에서 온다 — 프레임마다 다를 수 있다(확정 29).
 function loadDims(p) {
   return new Promise(function (resolve) {
     const img = new Image();
     img.onload = function () { resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
-    img.onerror = function () { resolve({ w: CELL.w, h: CELL.h }); };
+    img.onerror = function () { resolve({ w: currentBox(0).w, h: currentBox(0).h }); };
     img.src = 'data:' + p.mime + ';base64,' + p.full;
   });
 }
 
-function adjustFor(locIndex) {
-  const d = dimsByLoc[locIndex] || { w: CELL.w, h: CELL.h };
-  if (!adjustByLoc[locIndex]) adjustByLoc[locIndex] = newAdjust(d.w, d.h);
+function adjustFor(locIndex, box) {
+  const fallback = box || currentBox(0);
+  const d = dimsByLoc[locIndex] || { w: fallback.w, h: fallback.h };
+  if (!adjustByLoc[locIndex]) adjustByLoc[locIndex] = newAdjust(d.w, d.h, fallback);
   return adjustByLoc[locIndex];
 }
 
-// 미리보기 상자와 합성 캔버스가 같은 cellRect()를 쓴다. 상자 폭 / 640 이 축척이다.
+// 미리보기 상자와 합성 캔버스가 같은 cellRect()를 쓴다.
+// 축척 = 상자 폭 / 그 칸의 폭. 칸 크기는 프레임의 좌표판에서 온다(확정 29-⑸).
 function paintCell(c) {
   // 아직 배치되지 않아 폭이 0이면 다음 프레임에 다시 그린다(폭 0으로 그리면 1px 사진이 된다).
   const viewW = c.view.clientWidth;
@@ -225,17 +258,18 @@ function paintCell(c) {
     requestAnimationFrame(function () { paintCell(c); });
     return;
   }
-  c.view.style.height = Math.round(viewW * CELL.h / CELL.w) + 'px';
+  const box = currentBox(c.n);
+  c.view.style.height = Math.round(viewW * box.h / box.w) + 'px';
 
   const d = dimsByLoc[c.locIndex];
-  const a = adjustFor(c.locIndex);
-  const r = cellRect(d.w, d.h, a);
+  const a = adjustFor(c.locIndex, box);
+  const r = cellRect(d.w, d.h, a, box);
   a.mode = r.mode;
   a.scale = r.scale;
   a.offsetX = r.offsetX;
   a.offsetY = r.offsetY;
 
-  const f = viewW / CELL.w;
+  const f = viewW / box.w;
   c.fg.style.width = (r.w * f) + 'px';
   c.fg.style.height = (r.h * f) + 'px';
   c.fg.style.left = (r.left * f) + 'px';
@@ -263,8 +297,8 @@ function bindDrag(c) {
   };
   const move = function (px, py) {
     if (!active) return;
-    const f = (c.view.clientWidth || 1) / CELL.w;
-    const a = adjustFor(c.locIndex);
+    const f = (c.view.clientWidth || 1) / currentBox(c.n).w;
+    const a = adjustFor(c.locIndex, currentBox(c.n));
     a.offsetX += (px - lastX) / f;   // 화면 픽셀 → 셀 좌표계로 되돌린다
     a.offsetY += (py - lastY) / f;
     lastX = px;
@@ -376,7 +410,7 @@ function buildAdjust() {
     // 가운데로 초기화 — 이동·배율을 되돌리고 모드도 자동 기본값으로 돌아간다(확정 24-⑴·⑶).
     resetBtn.addEventListener('click', function () {
       const d = dimsByLoc[locIndex];
-      adjustByLoc[locIndex] = newAdjust(d.w, d.h);
+      adjustByLoc[locIndex] = newAdjust(d.w, d.h, currentBox(c.n));
       paintCell(c);
     });
     bindDrag(c);
@@ -416,8 +450,12 @@ async function make() {
     const chosen = selected.slice().sort(function (a, b) { return a - b; })
       .map(function (i) { return photos.filter(function (p) { return p.locIndex === i; })[0]; });
     // 셀 순서와 조정값 순서가 같은 배열이다(둘 다 locIndex 오름차순).
-    const adjusts = chosen.map(function (p) { return adjustFor(p.locIndex); });
-    const out = await composeFourcut(chosen, frameId, frameTexts, adjusts);
+    const adjusts = chosen.map(function (p, n) { return adjustFor(p.locIndex, currentBox(n)); });
+    // 교사가 올린 배경·오버레이와 좌표판·문구 숨김을 함께 넘긴다(확정 27·28·29).
+    // 자산을 못 읽었으면 빈 객체가 가고, 합성은 색 프레임으로 정상 진행한다.
+    const opts = frameOptionsFor(frameId);
+    opts.assets = await frameAssetsFor(frameId);
+    const out = await composeFourcut(chosen, frameId, frameTexts, adjusts, opts);
 
     if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
     lastResult = out;
@@ -487,6 +525,13 @@ document.getElementById('save-newtab').addEventListener('click', function () {
     }
     await db.ensureReady();
     frameTexts = await db.getFrameTexts();
+    // 프레임별 설정을 먼저 읽는다 — 칸 좌표가 여기서 정해지므로 사진 실픽셀 판정보다 앞서야 한다.
+    try {
+      frameMeta = (await db.getFrameAssetMeta()) || {};
+    } catch (e) {
+      frameMeta = {};   // 설정을 못 읽어도 기본 좌표판으로 계속 간다
+    }
+    frameAssetsFor(frameId);   // 기본 프레임 이미지를 미리 읽어 둔다(기다리지 않는다)
     photos = await db.listMyPhotos();     // 이미 locIndex 오름차순이다
     // 실픽셀을 먼저 읽어 둔다 — 셀보다 작은 사진의 자동 「전체 담기」 판정에 쓴다(확정 24-⑶).
     for (const p of photos) {

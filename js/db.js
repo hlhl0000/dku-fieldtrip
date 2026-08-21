@@ -5,7 +5,8 @@
 //   login / logout / getCachedCourse / completeLocation / currentLocIndex /
 //   listMyPhotos / getPhoto / onGroup / onDashboard / retryFailed /
 //   admin.createGroup / admin.updateCourse / admin.resetData / admin.setFrameTexts /
-//   wipeLocalData
+//   admin.setFrameAsset / admin.clearFrameAsset / admin.setFrameOptions /
+//   getFrameTexts / getFrameAssetMeta / getFrameAssetImages / wipeLocalData
 //
 // 진행도는 숫자 필드가 아니라 완료 집합 done:{ "L0": 승인시각 } 이다(확정 19, §5 금지 13).
 // 오프라인 전송 주체는 Firebase 모드에서 Firestore 지속 캐시(mutation queue) 하나뿐이며,
@@ -15,13 +16,54 @@ import {
   MODE, classIds, classLabels, firebaseConfig, activeProjectId, sdkUrls
 } from './firebase-config.js';
 import { groupEmail, doneKey, locIndexOfDoneKey, pad2, base64Bytes } from './common.js';
-import { DEFAULT_FRAME_TEXTS } from '../frames/frames.js';
+import {
+  DEFAULT_FRAME_TEXTS, FRAME_ASSET_KINDS, FRAME_ASSET_MAX_BYTES,
+  frameAssetDocId, FRAME_ASSET_META_DOC, DEFAULT_LAYOUT_ID
+} from '../frames/frames.js';
 
 // ── 상한값 (§1-3) ─────────────────────────────────────────────────────────
 export const LIMITS = {
   FULL_MAX_BYTES: 900000,   // full base64 문자열의 UTF-8 바이트 상한
   THUMB_MAX_BYTES: 20000    // thumb base64 문자열의 UTF-8 바이트 상한
 };
+
+// 프레임 이미지 상한 — 원천은 frames.js다(두 곳에 숫자를 적지 않는다 · F-1).
+export const FRAME_LIMITS = {
+  ASSET_MAX_BYTES: FRAME_ASSET_MAX_BYTES
+};
+
+// 프레임 이미지 1장의 형식·크기를 쓰기 전에 검사한다(확정 27-⑶ · §5 금지 22).
+export function assertFrameAsset(kind, asset) {
+  if (FRAME_ASSET_KINDS.indexOf(kind) < 0) {
+    throw new Error('알 수 없는 프레임 이미지 종류입니다: ' + kind);
+  }
+  if (!asset || typeof asset.b64 !== 'string' || !asset.b64) {
+    throw new Error('이미지 데이터가 비어 있습니다');
+  }
+  if (asset.b64.indexOf('data:') === 0) {
+    throw new Error('이미지 데이터 형식이 잘못되었습니다(data: 접두사 없이 저장합니다)');
+  }
+  // 오버레이를 JPEG로 저장하면 투명이 검정으로 채워져 사진을 다 덮는다(§5 금지 22).
+  if (kind === 'overlay' && asset.mime !== 'image/png') {
+    throw new Error('덮는 프레임은 투명을 지원하는 PNG여야 합니다');
+  }
+  const bytes = base64Bytes(asset.b64);
+  if (bytes > FRAME_LIMITS.ASSET_MAX_BYTES) {
+    throw new Error('이미지가 너무 큽니다(' + bytes + 'B). 더 작은 파일로 다시 시도하세요');
+  }
+  return bytes;
+}
+
+// 메타 인덱스의 한 프레임 항목을 기본값으로 채운다. 화면·합성이 같은 모양을 받는다.
+export function normalizeFrameOptions(entry) {
+  const e = entry || {};
+  return {
+    layoutId: e.layoutId || DEFAULT_LAYOUT_ID,
+    hideTexts: e.hideTexts === true,
+    background: e.background || null,
+    overlay: e.overlay || null
+  };
+}
 
 // 자격 오류 단일 고정 문구 (v3.1 db.js 계약 login — 이메일 열거 보호로 코드가 합쳐진다)
 export const CREDENTIAL_ERROR_TEXT =
@@ -540,6 +582,24 @@ class MockDB {
     };
   }
 
+  // 프레임별 설정·자산 요약. 이미지 본문은 여기 없다(문서를 작게 유지한다).
+  async getFrameAssetMeta() {
+    const c = this._ensureStore().config || {};
+    return c.frameAssetMeta || {};
+  }
+
+  // 한 프레임의 배경·오버레이 이미지 본문. 없는 슬롯은 키 자체를 넣지 않는다.
+  async getFrameAssetImages(frameId) {
+    const c = this._ensureStore().config || {};
+    const imgs = c.frameImages || {};
+    const out = {};
+    FRAME_ASSET_KINDS.forEach(function (kind) {
+      const d = imgs[frameAssetDocId(frameId, kind)];
+      if (d && d.b64) out[kind] = { b64: d.b64, mime: d.mime };
+    });
+    return out;
+  }
+
   // ── 구독 ────────────────────────────────────────────────────────────────
   onGroup(cb) {
     const self = this;
@@ -663,6 +723,52 @@ class MockDB {
       async setFrameTexts(texts) {
         const s = self._ensureStore();
         s.config.frameTexts = texts;
+        self._write(s);
+        return true;
+      },
+
+      // 이미지 1장 저장. 데모 모드는 localStorage라 용량이 작아 실패할 수 있다 —
+      // 그때는 조용히 삼키지 않고 무슨 일인지 말한다.
+      async setFrameAsset(frameId, kind, asset) {
+        const bytes = assertFrameAsset(kind, asset);
+        const s = self._ensureStore();
+        if (!s.config.frameImages) s.config.frameImages = {};
+        if (!s.config.frameAssetMeta) s.config.frameAssetMeta = {};
+        s.config.frameImages[frameAssetDocId(frameId, kind)] = { b64: asset.b64, mime: asset.mime };
+        const entry = normalizeFrameOptions(s.config.frameAssetMeta[frameId]);
+        entry[kind] = {
+          mime: asset.mime, bytes: bytes,
+          width: asset.width || null, height: asset.height || null,
+          updatedAt: new Date().toISOString()
+        };
+        s.config.frameAssetMeta[frameId] = entry;
+        try {
+          self._write(s);
+        } catch (e) {
+          throw new Error('데모 모드는 이 기기 저장 공간이 작아 이미지를 담지 못했습니다(실서버 모드에서는 저장됩니다)');
+        }
+        return { bytes: bytes };
+      },
+
+      async clearFrameAsset(frameId, kind) {
+        if (FRAME_ASSET_KINDS.indexOf(kind) < 0) throw new Error('알 수 없는 프레임 이미지 종류입니다: ' + kind);
+        const s = self._ensureStore();
+        if (s.config.frameImages) delete s.config.frameImages[frameAssetDocId(frameId, kind)];
+        if (s.config.frameAssetMeta && s.config.frameAssetMeta[frameId]) {
+          s.config.frameAssetMeta[frameId][kind] = null;
+        }
+        self._write(s);
+        return true;
+      },
+
+      // 좌표판·문구 숨김만 바꾼다. 이미지 본문은 건드리지 않는다(비파괴).
+      async setFrameOptions(frameId, options) {
+        const s = self._ensureStore();
+        if (!s.config.frameAssetMeta) s.config.frameAssetMeta = {};
+        const entry = normalizeFrameOptions(s.config.frameAssetMeta[frameId]);
+        if (options && options.layoutId) entry.layoutId = options.layoutId;
+        if (options && typeof options.hideTexts === 'boolean') entry.hideTexts = options.hideTexts;
+        s.config.frameAssetMeta[frameId] = entry;
         self._write(s);
         return true;
       }
@@ -1109,6 +1215,35 @@ class FirebaseDB {
     };
   }
 
+  // 프레임별 설정·자산 요약 1건 읽기. 작은 문서라 학생 화면에서 매번 읽어도 부담이 없다.
+  async getFrameAssetMeta() {
+    const sdk = await this._loadSdk();
+    try {
+      const snap = await sdk.fs.getDoc(sdk.fs.doc(this.fs, 'config', FRAME_ASSET_META_DOC));
+      return snap.exists() ? (snap.data() || {}) : {};
+    } catch (e) {
+      // 오프라인 첫 진입이면 캐시본이 없다. 프레임 이미지는 색 프레임으로 대체 가능하므로
+      // 여기서 던지지 않는다 — 네컷 만들기 자체를 막으면 안 된다.
+      return {};
+    }
+  }
+
+  // 한 프레임의 이미지 본문(최대 2건). 슬롯마다 문서가 따로라 1MiB 한도를 장당으로 쓴다.
+  async getFrameAssetImages(frameId) {
+    const sdk = await this._loadSdk();
+    const out = {};
+    for (const kind of FRAME_ASSET_KINDS) {
+      try {
+        const snap = await sdk.fs.getDoc(sdk.fs.doc(this.fs, 'config', frameAssetDocId(frameId, kind)));
+        const d = snap.exists() ? snap.data() : null;
+        if (d && d.b64) out[kind] = { b64: d.b64, mime: d.mime };
+      } catch (e) {
+        // 한 슬롯을 못 읽어도 나머지는 쓴다.
+      }
+    }
+    return out;
+  }
+
   onGroup(cb) {
     const sdk = this.sdk;
     if (!sdk || !this.fs) throw new Error('ensureReady()를 먼저 호출해야 합니다');
@@ -1287,6 +1422,49 @@ class FirebaseDB {
       async setFrameTexts(texts) {
         const sdk = await self._loadSdk();
         await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', 'frames'), texts, { merge: true });
+        return true;
+      },
+
+      // 이미지 1장 = 문서 1개(확정 27-⑶). 규칙은 기존 config/{doc} 그대로 쓴다(§5 금지 20).
+      async setFrameAsset(frameId, kind, asset) {
+        const bytes = assertFrameAsset(kind, asset);
+        const sdk = await self._loadSdk();
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', frameAssetDocId(frameId, kind)), {
+          b64: asset.b64, mime: asset.mime, bytes: bytes,
+          width: asset.width || null, height: asset.height || null,
+          frameId: frameId, kind: kind,
+          updatedAt: sdk.fs.serverTimestamp()
+        });
+        // 메타는 merge로 얹는다 — 다른 프레임·다른 슬롯의 기록을 지우지 않는다(비파괴).
+        const patch = {};
+        patch[frameId] = {};
+        patch[frameId][kind] = {
+          mime: asset.mime, bytes: bytes,
+          width: asset.width || null, height: asset.height || null
+        };
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', FRAME_ASSET_META_DOC), patch, { merge: true });
+        return { bytes: bytes };
+      },
+
+      async clearFrameAsset(frameId, kind) {
+        if (FRAME_ASSET_KINDS.indexOf(kind) < 0) throw new Error('알 수 없는 프레임 이미지 종류입니다: ' + kind);
+        const sdk = await self._loadSdk();
+        await sdk.fs.deleteDoc(sdk.fs.doc(self.fs, 'config', frameAssetDocId(frameId, kind)));
+        const patch = {};
+        patch[frameId] = {};
+        patch[frameId][kind] = null;
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', FRAME_ASSET_META_DOC), patch, { merge: true });
+        return true;
+      },
+
+      async setFrameOptions(frameId, options) {
+        const sdk = await self._loadSdk();
+        const entry = {};
+        if (options && options.layoutId) entry.layoutId = options.layoutId;
+        if (options && typeof options.hideTexts === 'boolean') entry.hideTexts = options.hideTexts;
+        const patch = {};
+        patch[frameId] = entry;
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', FRAME_ASSET_META_DOC), patch, { merge: true });
         return true;
       }
     };

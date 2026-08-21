@@ -170,3 +170,120 @@ export async function compressPhoto(file, onStage) {
     }
   }
 }
+
+// ── 프레임 이미지 압축 (v3.3 확정 27·28 · §5 금지 22) ─────────────────────
+// 사진과 다른 점 두 가지
+//   ⑴ 목표 크기가 **좌표판의 캔버스 크기**로 정해져 있다. 원본 비율이 달라도 그 크기로 맞춘다.
+//   ⑵ 오버레이는 투명을 보존해야 하므로 **PNG**로 인코딩한다. PNG에는 품질 인자가 없어서
+//      품질 루프 대신 **해상도 축소 루프**로 상한을 맞춘다. 여기서 JPEG를 쓰면 투명이
+//      검정으로 채워져 프레임이 사진을 통째로 덮는다(§5 금지 22).
+export const FRAME_ASSET = {
+  maxBytes: 900000,                       // 문서 1개 = 이미지 1장. 사진과 같은 상한
+  jpegQualityStart: 0.9,
+  jpegQualityMin: 0.45,
+  qualityStep: 0.05,
+  pngScales: [1, 0.85, 0.7, 0.55, 0.45, 0.35],
+  backgroundMime: 'image/jpeg',
+  overlayMime: 'image/png'
+};
+
+export const FRAME_ASSET_TOO_LARGE_TEXT =
+  '이 이미지를 충분히 줄이지 못했습니다. 더 단순하거나 작은 파일로 다시 시도하세요';
+
+// 캔버스를 목표 크기로 두고 source를 그린다.
+//   background = cover(잘라서 꽉 채움) · overlay = 캔버스에 정확히 맞춤(프레임 도안이므로)
+function drawFrameSource(ctx, source, kind, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  if (kind === 'overlay') {
+    ctx.drawImage(source, 0, 0, w, h);
+    return;
+  }
+  const sw = source.width || source.naturalWidth;
+  const sh = source.height || source.naturalHeight;
+  const scale = Math.max(w / sw, h / sh);
+  const dw = sw * scale;
+  const dh = sh * scale;
+  ctx.drawImage(source, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
+/**
+ * 프레임 배경·오버레이 이미지 1장을 업로드용 base64로 만든다.
+ * @param {File|Blob} file 교사가 고른 이미지
+ * @param {'background'|'overlay'} kind 슬롯
+ * @param {number} targetW 좌표판 캔버스 너비
+ * @param {number} targetH 좌표판 캔버스 높이
+ * @param {(text:string)=>void} [onStage] 진행 문구 콜백
+ * @returns {{b64:string, mime:string, bytes:number, width:number, height:number,
+ *            sourceWidth:number, sourceHeight:number, attempts:Array}}
+ */
+export async function compressFrameAsset(file, kind, targetW, targetH, onStage) {
+  const isOverlay = kind === 'overlay';
+  const mime = isOverlay ? FRAME_ASSET.overlayMime : FRAME_ASSET.backgroundMime;
+  let decoded = null;
+  let canvas = null;
+  try {
+    if (onStage) onStage('이미지를 읽는 중');
+    decoded = await decodeImage(file);
+
+    canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error(DECODE_ERROR_TEXT);
+
+    const attempts = [];
+
+    if (isOverlay) {
+      // PNG — 품질 인자가 없다. 해상도를 단계로 낮춰 상한을 맞춘다.
+      for (const k of FRAME_ASSET.pngScales) {
+        const w = Math.max(1, Math.round(targetW * k));
+        const h = Math.max(1, Math.round(targetH * k));
+        if (onStage) onStage('프레임을 줄이는 중 (' + w + '×' + h + ')');
+        canvas.width = w;
+        canvas.height = h;
+        drawFrameSource(ctx, decoded.source, kind, w, h);
+        const blob = await toBlobAsync(canvas, mime, undefined);
+        if (!blob) throw new Error(DECODE_ERROR_TEXT);
+        const b64 = await blobToBase64(blob);
+        const bytes = utf8Bytes(b64);
+        attempts.push({ w: w, h: h, quality: null, bytes: bytes });
+        if (bytes <= FRAME_ASSET.maxBytes) {
+          return {
+            b64: b64, mime: mime, bytes: bytes, width: w, height: h,
+            sourceWidth: decoded.width, sourceHeight: decoded.height, attempts: attempts
+          };
+        }
+      }
+      throw new Error(FRAME_ASSET_TOO_LARGE_TEXT);
+    }
+
+    // 배경 — JPEG 품질 루프. 캔버스 크기는 좌표판 그대로 둔다.
+    canvas.width = targetW;
+    canvas.height = targetH;
+    drawFrameSource(ctx, decoded.source, kind, targetW, targetH);
+    for (let q = FRAME_ASSET.jpegQualityStart; q >= FRAME_ASSET.jpegQualityMin - 1e-9; q -= FRAME_ASSET.qualityStep) {
+      const quality = Math.round(q * 100) / 100;
+      if (onStage) onStage('배경을 줄이는 중 (품질 ' + quality + ')');
+      const blob = await toBlobAsync(canvas, mime, quality);
+      if (!blob) throw new Error(DECODE_ERROR_TEXT);
+      const b64 = await blobToBase64(blob);
+      const bytes = utf8Bytes(b64);
+      attempts.push({ w: targetW, h: targetH, quality: quality, bytes: bytes });
+      if (bytes <= FRAME_ASSET.maxBytes) {
+        return {
+          b64: b64, mime: mime, bytes: bytes, width: targetW, height: targetH,
+          sourceWidth: decoded.width, sourceHeight: decoded.height, attempts: attempts
+        };
+      }
+    }
+    throw new Error(FRAME_ASSET_TOO_LARGE_TEXT);
+  } finally {
+    // 사진 경로와 같은 해제 계약.
+    if (decoded) {
+      if (decoded.source && typeof decoded.source.close === 'function') decoded.source.close();
+      if (decoded.objectUrl) URL.revokeObjectURL(decoded.objectUrl);
+    }
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
+}

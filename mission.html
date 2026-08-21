@@ -73,6 +73,7 @@
 import { db, statusOf, computeCurrentLocIndex, progressCount, unsentKeys } from './js/db.js';
 import { renderInitError, renderPersistenceBanner } from './js/firebase-config.js';
 import { compressPhoto } from './js/compress.js';
+import { FRAMES } from './frames/frames.js';
 import {
   requireLogin, clearSession, statusText, CURRENT_TEXT, STATUS_TEXT,
   setText, el, clear, formatTime, markBusy, markIdle,
@@ -390,6 +391,20 @@ function noticeIfRevMismatch(next) {
 }
 
 // ── 시작 ──────────────────────────────────────────────────────────────────
+// 네컷 프레임 이미지를 미리 한 번 읽어 Firestore 지속 캐시에 넣어 둔다(v3.3 확정 27).
+// 학생이 캠퍼스에서 오프라인이 된 뒤 네컷 화면에 처음 들어가면 프레임 이미지를 못 읽는데,
+// 미션 화면은 온라인일 때 반드시 거치는 길목이므로 여기서 선반입한다.
+// **비차단이다** — 실패해도 미션 화면은 아무 영향을 받지 않는다.
+function prefetchFrameAssets() {
+  Promise.resolve()
+    .then(function () { return db.getFrameAssetMeta(); })
+    .then(function () { return db.getFrameTexts(); })
+    .then(function () {
+      return Promise.all(FRAMES.map(function (f) { return db.getFrameAssetImages(f.id); }));
+    })
+    .catch(function () { /* 선반입 실패는 조용히 넘긴다 — 네컷 화면이 색 프레임으로 대체한다 */ });
+}
+
 (async function start() {
   // firebase 모드에서는 여기서 SDK·Auth·Firestore가 준비된다. 이 화면은 아침 사전 로그인
   // 이후 학생이 직접 재진입·새로고침하는 유일한 화면이라 index를 거치지 않는 진입이 정상 경로다.
@@ -442,6 +457,7 @@ function noticeIfRevMismatch(next) {
       noticeIfRevMismatch(next);
       render();
     });
+    prefetchFrameAssets();
   } catch (e) {
     showNotice(e && e.message ? e.message : '화면을 불러오지 못했습니다');
   }

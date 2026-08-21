@@ -125,6 +125,24 @@ body.page-admin #app { max-width: 1040px; }
         <select id="course-group"></select>
       </div>
       <p id="course-lock-note" class="admin-note"></p>
+
+      <!-- 다른 모둠 코스 가져오기 (v3.3 확정 26) — 화면만 채운다. 서버에는 「코스 저장」이 쓴다. -->
+      <div class="copy-row">
+        <label for="course-copy-from">다른 모둠 코스 가져오기</label>
+        <select id="course-copy-from"></select>
+        <button id="course-copy-btn" type="button" class="secondary">가져오기</button>
+      </div>
+      <p class="admin-note">고른 모둠의 장소·미션을 이 화면으로 복사합니다. 아직 저장되지 않으므로,
+        필요한 곳을 고친 뒤 아래 「코스 저장」을 눌러야 반영됩니다.</p>
+      <div id="course-copy-confirm" class="confirm-box" hidden>
+        <p class="error" id="course-copy-text"></p>
+        <div class="button-row">
+          <button id="course-copy-cancel" type="button" class="secondary">취소</button>
+          <button id="course-copy-ok" type="button">덮어씁니다</button>
+        </div>
+      </div>
+      <p id="course-copy-msg" class="note" role="status"></p>
+
       <div id="course-list"></div>
       <div class="button-row">
         <button id="loc-add-btn" type="button" class="secondary">장소 추가</button>
@@ -147,6 +165,45 @@ body.page-admin #app { max-width: 1040px; }
       </div>
       <button id="frame-save-btn" type="button">문구 저장</button>
       <p id="frame-msg" class="note" role="status"></p>
+
+      <!-- ── 3-2. 프레임 이미지 (v3.3 확정 27·28·29) ───────────────────── -->
+      <div class="preview-box">
+        <h3 class="sub-title">프레임 이미지</h3>
+        <p class="note">캠퍼스 사진이나 만들어 둔 프레임 PNG를 올려 네컷에 씁니다.
+          <strong>배경 사진</strong>은 사진 칸 <em>아래</em>에 깔리고, <strong>덮는 프레임</strong>은 칸 <em>위</em>에 겹칩니다.
+          덮는 프레임은 사진이 보일 자리가 투명하게 뚫린 PNG여야 합니다.
+          파일을 고르면 바로 올라갑니다.</p>
+        <div class="field">
+          <label for="asset-frame">어느 프레임에 넣을까요</label>
+          <select id="asset-frame"></select>
+        </div>
+        <div class="field">
+          <label for="asset-layout">칸 배치</label>
+          <select id="asset-layout"></select>
+        </div>
+        <label class="check-row">
+          <input id="asset-hide-texts" type="checkbox">
+          이미지에 문구가 이미 그려져 있어, 글자를 따로 그리지 않음
+        </label>
+        <div class="button-row">
+          <button id="asset-options-save" type="button" class="secondary">배치·문구 설정 저장</button>
+        </div>
+        <div class="field">
+          <label for="asset-bg-file">배경 사진 올리기 (JPEG로 저장됩니다)</label>
+          <input id="asset-bg-file" type="file" accept="image/*">
+        </div>
+        <div class="field">
+          <label for="asset-overlay-file">덮는 프레임 올리기 (투명 PNG만)</label>
+          <input id="asset-overlay-file" type="file" accept="image/png">
+        </div>
+        <div class="button-row">
+          <button id="asset-bg-clear" type="button" class="secondary">배경 지우기</button>
+          <button id="asset-overlay-clear" type="button" class="secondary">덮는 프레임 지우기</button>
+        </div>
+        <p id="asset-state" class="admin-note"></p>
+        <p id="asset-error" class="error" role="alert" hidden></p>
+        <p id="asset-msg" class="note" role="status"></p>
+      </div>
 
       <!-- 미리보기 — 미션 4곳을 완주하지 않고도 프레임·문구를 눈으로 확인한다. -->
       <div class="preview-box">
@@ -194,8 +251,11 @@ import { db } from './js/db.js';
 import {
   classOptions, setText, el, clear, registerServiceWorker
 } from './js/common.js';
-import { DEFAULT_FRAME_TEXTS, FRAMES } from './frames/frames.js';
+import {
+  DEFAULT_FRAME_TEXTS, FRAMES, LAYOUTS, frameById, frameLayoutOf, layoutById
+} from './frames/frames.js';
 import { composeFourcut } from './js/fourcut.js';
+import { compressFrameAsset } from './js/compress.js';
 
 const TEACHER_KEY = 'dku:teacher';
 
@@ -227,6 +287,7 @@ let classId = null;
 let rows = [];              // db.onDashboard 계약의 행 목록
 let unsubscribe = null;
 let editing = null;         // { gid, locked, course: [{locIndex, name, mission}] }
+let frameMeta = {};         // frameId → {layoutId, hideTexts, background, overlay}
 
 function show(node, text) {
   setText(node, text);
@@ -263,6 +324,7 @@ function subscribe(nextClassId) {
   unsubscribe = db.onDashboard(classId, function (next) {
     rows = next;
     renderGroupSelect();
+    renderCopySources();
   });
 }
 
@@ -403,9 +465,79 @@ function loadCourse(gid) {
     })
   };
   renderCourse();
+  renderCopySources();
 }
 
 courseGroup.addEventListener('change', function () { loadCourse(courseGroup.value); });
+
+// ── 2-1. 다른 모둠 코스 가져오기 (v3.3 확정 26) ───────────────────────────
+// 서버에 쓰지 않는다. 편집 중인 배열만 채우고, 저장은 기존 「코스 저장」이 단독으로 한다.
+// 그래서 updateCourse의 잠금 규칙(순서·삭제 금지)을 우회할 길이 생기지 않는다.
+const copyFrom = document.getElementById('course-copy-from');
+const copyMsg = document.getElementById('course-copy-msg');
+const copyConfirm = document.getElementById('course-copy-confirm');
+const copyConfirmText = document.getElementById('course-copy-text');
+const copyBtn = document.getElementById('course-copy-btn');
+
+// 복사 원본 목록 — 지금 편집 중인 모둠과, 코스가 빈 모둠은 뺀다(가져와도 얻을 것이 없다).
+function renderCopySources() {
+  const keep = copyFrom.value;
+  clear(copyFrom);
+  const sources = rows.filter(function (r) {
+    return (!editing || r.gid !== editing.gid) && (r.course || []).length > 0;
+  });
+  sources.forEach(function (r) {
+    const o = document.createElement('option');
+    o.value = r.gid;
+    o.textContent = Number(r.groupNo) + '모둠 (장소 ' + (r.course || []).length + '곳)';
+    copyFrom.appendChild(o);
+  });
+  if (sources.some(function (r) { return r.gid === keep; })) copyFrom.value = keep;
+
+  // 잠긴 모둠에는 복사를 막는다(§5 금지 21). locIndex가 사진 문서 주소라
+  // 순서가 바뀌면 이미 올라온 사진과 장소가 어긋난다.
+  const locked = !!(editing && editing.locked);
+  const none = sources.length === 0;
+  copyBtn.disabled = locked || none;
+  copyFrom.disabled = locked || none;
+  if (locked) {
+    setText(copyMsg, '이 모둠은 이미 사진이 올라와 장소 순서가 잠겼습니다. 코스를 통째로 가져올 수 없습니다.');
+  } else if (none) {
+    setText(copyMsg, '가져올 수 있는 다른 모둠의 코스가 아직 없습니다.');
+  } else {
+    setText(copyMsg, '');
+  }
+}
+
+copyBtn.addEventListener('click', function () {
+  if (!editing || editing.locked) return;
+  const src = rows.filter(function (r) { return r.gid === copyFrom.value; })[0];
+  if (!src) return;
+  const has = editing.course.length;
+  setText(copyConfirmText,
+    Number(src.groupNo) + '모둠의 장소 ' + (src.course || []).length + '곳을 가져옵니다. ' +
+    (has ? '지금 화면에 있는 장소 ' + has + '곳은 사라집니다(아직 저장 전이라면 되돌릴 수 없습니다).' : ''));
+  copyConfirm.hidden = false;
+});
+
+document.getElementById('course-copy-cancel').addEventListener('click', function () {
+  copyConfirm.hidden = true;
+  setText(copyMsg, '가져오지 않았습니다.');
+});
+
+document.getElementById('course-copy-ok').addEventListener('click', function () {
+  copyConfirm.hidden = true;
+  if (!editing || editing.locked) return;
+  const src = rows.filter(function (r) { return r.gid === copyFrom.value; })[0];
+  if (!src) return;
+  // 값만 복사한다 — 원본 배열·객체를 그대로 물면 한쪽 편집이 다른 쪽을 바꾼다.
+  editing.course = (src.course || []).map(function (loc, i) {
+    return { locIndex: i, name: loc.name || '', mission: loc.mission || '' };
+  });
+  renderCourse();
+  setText(copyMsg, Number(src.groupNo) + '모둠의 코스 ' + editing.course.length +
+    '곳을 가져왔습니다. 아직 저장되지 않았습니다 — 확인한 뒤 「코스 저장」을 누르세요.');
+});
 
 function renderCourse() {
   clear(courseList);
@@ -529,6 +661,147 @@ document.getElementById('frame-save-btn').addEventListener('click', async functi
   }
 });
 
+// ── 3-2. 프레임 이미지 (v3.3 확정 27·28·29) ──────────────────────────────
+// 규칙 파일은 건드리지 않는다 — 기존 config/{doc}가 「읽기=인증자, 쓰기=교사」다(§5 금지 20).
+const assetFrame = document.getElementById('asset-frame');
+const assetLayout = document.getElementById('asset-layout');
+const assetHideTexts = document.getElementById('asset-hide-texts');
+const assetMsg = document.getElementById('asset-msg');
+const assetError = document.getElementById('asset-error');
+const assetState = document.getElementById('asset-state');
+
+FRAMES.forEach(function (f) {
+  const o = document.createElement('option');
+  o.value = f.id;
+  o.textContent = f.name;
+  assetFrame.appendChild(o);
+});
+LAYOUTS.forEach(function (l) {
+  const o = document.createElement('option');
+  o.value = l.id;
+  o.textContent = l.name;
+  assetLayout.appendChild(o);
+});
+
+function optionsOf(frameId) {
+  const e = frameMeta[frameId] || {};
+  return { layoutId: e.layoutId || null, hideTexts: e.hideTexts === true };
+}
+
+// 업로드 이미지를 맞출 캔버스 크기.
+// **화면에서 고르는 중인 좌표판**을 기준으로 삼는다 — 저장된 값을 쓰면, 배치를 바꾸고
+// 이미지를 올린 뒤 저장하는 순서에서 이미지 크기와 실제 캔버스가 어긋난다.
+function assetTargetSize() {
+  if (assetLayout.value) return layoutById(assetLayout.value);
+  return frameLayoutOf(frameById(assetFrame.value), optionsOf(assetFrame.value));
+}
+
+function describeAsset(entry, kind) {
+  const a = entry && entry[kind];
+  if (!a) return '없음';
+  const kb = a.bytes ? Math.round(a.bytes / 1024) + ' KB' : '크기 미상';
+  const px = (a.width && a.height) ? a.width + '×' + a.height + ' · ' : '';
+  return px + kb;
+}
+
+// @param {boolean} syncSelect 저장된 값을 선택 칸에 다시 채울지. 프레임을 바꾸거나
+//        저장을 마친 직후에만 true다. 사용자가 고르는 중에는 false여야 한다.
+function renderAssetState(syncSelect) {
+  const id = assetFrame.value;
+  const entry = frameMeta[id] || {};
+  if (syncSelect !== false) {
+    assetLayout.value = frameLayoutOf(frameById(id), optionsOf(id)).id;
+    assetHideTexts.checked = entry.hideTexts === true;
+  }
+  const layout = assetTargetSize();
+  setText(assetState,
+    '지금 상태 — 배경: ' + describeAsset(entry, 'background') +
+    ' / 덮는 프레임: ' + describeAsset(entry, 'overlay') +
+    ' / 캔버스 ' + layout.width + '×' + layout.height + ' · 칸 ' + layout.cells.length + '개' +
+    (layout.id === frameLayoutOf(frameById(id), optionsOf(id)).id
+      ? ''
+      : ' — 이 배치는 아직 저장 전입니다. 「배치·문구 설정 저장」을 누르세요'));
+}
+
+async function reloadFrameMeta() {
+  try {
+    frameMeta = (await db.getFrameAssetMeta()) || {};
+  } catch (e) {
+    frameMeta = {};
+  }
+  renderAssetState();
+}
+
+assetFrame.addEventListener('change', function () {
+  renderAssetState();
+  // 미리보기 선택도 따라오게 해 둔다 — 방금 손댄 프레임을 그대로 확인하게 된다.
+  const pf = document.getElementById('preview-frame');
+  if (pf) pf.value = assetFrame.value;
+});
+assetLayout.addEventListener('change', function () { renderAssetState(false); });
+
+document.getElementById('asset-options-save').addEventListener('click', async function () {
+  show(assetError, '');
+  setText(assetMsg, '저장하는 중…');
+  try {
+    await db.admin.setFrameOptions(assetFrame.value, {
+      layoutId: assetLayout.value,
+      hideTexts: assetHideTexts.checked
+    });
+    await reloadFrameMeta();
+    setText(assetMsg, '배치·문구 설정을 저장했습니다.');
+  } catch (e) {
+    setText(assetMsg, '');
+    show(assetError, explainWriteError(e, e && e.message ? e.message : '설정을 저장하지 못했습니다'));
+  }
+});
+
+// 파일을 고르면 바로 압축·업로드한다. 좌표판 크기로 맞추므로 원본이 커도 된다.
+async function uploadAsset(kind, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  show(assetError, '');
+  try {
+    const layout = assetTargetSize();
+    const out = await compressFrameAsset(file, kind, layout.width, layout.height, function (t) {
+      setText(assetMsg, t);
+    });
+    setText(assetMsg, '올리는 중…');
+    await db.admin.setFrameAsset(assetFrame.value, kind, out);
+    await reloadFrameMeta();
+    setText(assetMsg, (kind === 'overlay' ? '덮는 프레임' : '배경 사진') + '을 올렸습니다 — ' +
+      out.width + '×' + out.height + ' · ' + Math.round(out.bytes / 1024) + ' KB. ' +
+      '아래 「미리보기 만들기」로 확인하세요.');
+  } catch (e) {
+    setText(assetMsg, '');
+    show(assetError, explainWriteError(e, e && e.message ? e.message : '이미지를 올리지 못했습니다'));
+  } finally {
+    input.value = '';   // 같은 파일을 다시 고를 수 있게 비운다
+  }
+}
+
+document.getElementById('asset-bg-file').addEventListener('change', function () {
+  uploadAsset('background', this);
+});
+document.getElementById('asset-overlay-file').addEventListener('change', function () {
+  uploadAsset('overlay', this);
+});
+
+async function clearAsset(kind) {
+  show(assetError, '');
+  setText(assetMsg, '지우는 중…');
+  try {
+    await db.admin.clearFrameAsset(assetFrame.value, kind);
+    await reloadFrameMeta();
+    setText(assetMsg, (kind === 'overlay' ? '덮는 프레임' : '배경 사진') + '을 지웠습니다.');
+  } catch (e) {
+    setText(assetMsg, '');
+    show(assetError, explainWriteError(e, e && e.message ? e.message : '이미지를 지우지 못했습니다'));
+  }
+}
+document.getElementById('asset-bg-clear').addEventListener('click', function () { clearAsset('background'); });
+document.getElementById('asset-overlay-clear').addEventListener('click', function () { clearAsset('overlay'); });
+
 // ── 3-1. 네컷 미리보기 ────────────────────────────────────────────────────
 // 미션 4곳을 완주해야만 결과물을 볼 수 있으면 프레임·문구를 고칠 때마다 코스를 다시 돌아야 한다.
 // 예시 사진 4장으로 학생 화면과 같은 합성 코드(fourcut.js)를 태워 눈으로 확인한다.
@@ -575,10 +848,20 @@ document.getElementById('preview-btn').addEventListener('click', async function 
       top: frameTop.value || DEFAULT_FRAME_TEXTS.top,
       bottom: frameBottom.value || DEFAULT_FRAME_TEXTS.bottom
     };
-    const res = await composeFourcut(photos, previewFrame.value, texts, [null, null, null, null], {});
+    // 학생 화면과 **같은 입력**으로 합성한다 — 올린 이미지·좌표판·문구 숨김까지 포함(확정 29-⑸).
+    const opts = optionsOf(previewFrame.value);
+    try {
+      opts.assets = (await db.getFrameAssetImages(previewFrame.value)) || {};
+    } catch (e) {
+      opts.assets = {};
+    }
+    const res = await composeFourcut(photos, previewFrame.value, texts, [null, null, null, null], opts);
     previewImg.src = res.dataUrl;
     previewImg.hidden = false;
-    setText(previewMsg, res.width + ' × ' + res.height + ' — 학생 화면에서 만드는 것과 같은 크기입니다.');
+    const used = (res.assetsUsed || []).length
+      ? ' · 올린 이미지 ' + res.assetsUsed.map(function (k) { return k === 'overlay' ? '덮는 프레임' : '배경'; }).join('·') + ' 적용'
+      : ' · 올린 이미지 없음(색 프레임)';
+    setText(previewMsg, res.width + ' × ' + res.height + ' — 학생 화면에서 만드는 것과 같은 크기입니다.' + used);
   } catch (e) {
     setText(previewMsg, e && e.message ? e.message : '미리보기를 만들지 못했습니다');
   }
@@ -634,6 +917,7 @@ document.getElementById('reset-force').addEventListener('click', async function 
   const texts = await db.getFrameTexts();
   frameTop.value = (texts && texts.top) || DEFAULT_FRAME_TEXTS.top;
   frameBottom.value = (texts && texts.bottom) || DEFAULT_FRAME_TEXTS.bottom;
+  await reloadFrameMeta();
 })();
 </script>
 </body>

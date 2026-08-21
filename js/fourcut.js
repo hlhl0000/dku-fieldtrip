@@ -11,8 +11,18 @@
 //   · 결과 toBlob이 null이거나 예외면 정상 오류로 처리한다(문구 + 재생성 버튼).
 //     마지막으로 성공한 미리보기·Blob은 유지한다 — 저장 3버튼의 공통 단일 실패점을 없앤다.
 //   · 입력 비트맵 4장도 finally에서 해제한다(bitmap.close · 임시 canvas 0×0 · objectURL revoke).
+//
+// v3.3 확정 28·29 추가
+//   · 캔버스 크기와 칸 좌표는 **프레임이 가리키는 좌표판**에서 나온다(frames.js LAYOUTS).
+//     이 파일에 720·2280·4칸 좌표를 다시 적지 않는다.
+//   · 그리기 순서는 배경색 → 배경 이미지 → 칸 → 강조선 → 문구 → 오버레이 이미지 고정이다.
+//     오버레이가 마지막이라 기성 프레임 PNG의 테두리·장식이 사진 위에 얹힌다.
+//   · 오버레이는 투명을 보존해야 하므로 이 파일에서도 JPEG로 다시 인코딩하지 않는다(§5 금지 22).
 
-import { LAYOUT, cellTop, frameById, DEFAULT_FRAME_TEXTS } from '../frames/frames.js';
+import {
+  LAYOUT, cellTop, frameById, DEFAULT_FRAME_TEXTS,
+  frameLayoutOf, cellBoxOf
+} from '../frames/frames.js';
 
 export const OUTPUT = {
   mime: 'image/jpeg',
@@ -26,6 +36,8 @@ export const COMPOSE_ERROR_TEXT = '네컷 이미지를 만들지 못했습니다
 // ── 셀 조정 (확정 24) ─────────────────────────────────────────────────────
 // 셀 좌표계는 640 × 480 하나뿐이다. 미리보기 화면과 합성 캔버스가 **같은 함수**로
 // 사각형을 계산하므로 화면에서 본 범위가 그대로 산출물이 된다(F-1 단일 원천).
+// 기본 좌표판(vertical4)의 칸 크기. 하위호환용 상수이며, 좌표판이 다른 프레임에서는
+// cellRect의 4번째 인자로 그 프레임의 칸 크기를 넘긴다(§5 금지 23 — 이름·시그니처 보존).
 export const CELL = { w: LAYOUT.cellW, h: LAYOUT.cellH };
 
 export const ADJUST = {
@@ -44,42 +56,51 @@ function clamp(v, lo, hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// 셀을 꽉 채우는 배율 / 셀 안에 전부 들어가는 배율.
-export function coverScale(sw, sh) { return Math.max(CELL.w / sw, CELL.h / sh); }
-export function containScale(sw, sh) { return Math.min(CELL.w / sw, CELL.h / sh); }
+// 셀을 꽉 채우는 배율 / 셀 안에 전부 들어가는 배율. cell을 생략하면 기본 좌표판의 칸이다.
+export function coverScale(sw, sh, cell) {
+  const box = cell && cell.w && cell.h ? cell : CELL;
+  return Math.max(box.w / sw, box.h / sh);
+}
+export function containScale(sw, sh, cell) {
+  const box = cell && cell.w && cell.h ? cell : CELL;
+  return Math.min(box.w / sw, box.h / sh);
+}
 
 // 실픽셀이 셀(640×480)보다 작아 **확대가 필요하면** 「전체 담기」를 기본값으로 연다(확정 24-⑶).
 // 늘려 채우면 화질이 뭉개지고, 잘라 채우면 작은 사진이 더 잘린다.
-export function defaultFillMode(sw, sh) {
-  return coverScale(sw, sh) > 1 ? 'contain' : 'cover';
+export function defaultFillMode(sw, sh, cell) {
+  return coverScale(sw, sh, cell) > 1 ? 'contain' : 'cover';
 }
 
 // 한 셀의 조정 초기값 — 가운데 맞춤, 배율 1배(확정 24-⑴).
-export function newAdjust(sw, sh) {
-  return { mode: defaultFillMode(sw, sh), scale: 1, offsetX: 0, offsetY: 0 };
+export function newAdjust(sw, sh, cell) {
+  return { mode: defaultFillMode(sw, sh, cell), scale: 1, offsetX: 0, offsetY: 0 };
 }
 
 /**
- * 셀 좌표계(640 × 480)에서 사진을 그릴 사각형을 계산한다.
+ * 셀 좌표계에서 사진을 그릴 사각형을 계산한다.
  * 이동량은 사진이 셀 밖으로 달아나지 않도록 잘라 낸다(잘라 낸 값도 함께 돌려준다).
+ * @param {{w:number,h:number}} [cell] 이 칸의 크기. 생략하면 기본 좌표판의 640 × 480이다
+ *        (§5 금지 23 — 기존 호출부·검사가 3인자로 부른다).
  * @returns {{mode:string, scale:number, w:number, h:number, left:number, top:number,
  *            maxX:number, maxY:number, offsetX:number, offsetY:number}}
  */
-export function cellRect(sw, sh, adjust) {
+export function cellRect(sw, sh, adjust, cell) {
   const a = adjust || {};
+  const box = cell && cell.w && cell.h ? cell : CELL;
   const mode = a.mode === 'contain' ? 'contain' : 'cover';
-  const base = mode === 'contain' ? containScale(sw, sh) : coverScale(sw, sh);
+  const base = mode === 'contain' ? containScale(sw, sh, box) : coverScale(sw, sh, box);
   const scale = clamp(num(a.scale, 1), ADJUST.minScale, ADJUST.maxScale);
   const w = sw * base * scale;
   const h = sh * base * scale;
-  const maxX = Math.abs(w - CELL.w) / 2;
-  const maxY = Math.abs(h - CELL.h) / 2;
+  const maxX = Math.abs(w - box.w) / 2;
+  const maxY = Math.abs(h - box.h) / 2;
   const offsetX = clamp(num(a.offsetX, 0), -maxX, maxX);
   const offsetY = clamp(num(a.offsetY, 0), -maxY, maxY);
   return {
     mode: mode, scale: scale, w: w, h: h,
-    left: (CELL.w - w) / 2 + offsetX,
-    top: (CELL.h - h) / 2 + offsetY,
+    left: (box.w - w) / 2 + offsetX,
+    top: (box.h - h) / 2 + offsetY,
     maxX: maxX, maxY: maxY, offsetX: offsetX, offsetY: offsetY
   };
 }
@@ -190,8 +211,12 @@ async function decodeBase64(b64, mime) {
  * @param {{top:string, bottom:string}} texts 상·하단 문구
  * @param {Array<{mode:string, scale:number, offsetX:number, offsetY:number}>} adjusts
  *        셀별 조정값(확정 24). 없거나 빈 자리는 그 사진의 자동 기본값(가운데 맞춤)으로 채운다.
- * @param {{useFilter:boolean}} options 흐린 배경의 `ctx.filter` 보강 사용 여부(검사용)
- * @returns {{blob:Blob, dataUrl:string, width:number, height:number, cells:Array}}
+ * @param {object} options 부가 설정 — 시그니처는 바꾸지 않는다(§5 금지 23)
+ *        · useFilter:false  흐린 배경의 `ctx.filter` 보강을 끈다(검사용)
+ *        · layoutId         교사가 고른 좌표판. 프레임 기본값을 이긴다(확정 29-⑷)
+ *        · hideTexts        문구를 그리지 않는다. 문구가 이미 그려진 기성 프레임용(확정 28-⑶)
+ *        · assets           {background:{b64,mime}, overlay:{b64,mime}} 관리 화면에서 올린 이미지
+ * @returns {{blob:Blob, dataUrl:string, width:number, height:number, cells:Array, assetsUsed:Array}}
  */
 export async function composeFourcut(photos, frameId, texts, adjusts, options) {
   if (!Array.isArray(photos) || photos.length !== LAYOUT.cells) {
@@ -210,9 +235,30 @@ export async function composeFourcut(photos, frameId, texts, adjusts, options) {
     top: ((texts && texts.top) || '').trim() ? texts.top : DEFAULT_FRAME_TEXTS.top,
     bottom: ((texts && texts.bottom) || '').trim() ? texts.bottom : DEFAULT_FRAME_TEXTS.bottom
   };
+  // 캔버스 크기·칸 좌표·문구 기준선의 원천은 좌표판 하나다(확정 29-⑸).
+  const layout = frameLayoutOf(frame, options);
+  const assets = (options && options.assets) || {};
+  const hideTexts = !!(options && options.hideTexts);
   const decoded = [];
+  const assetDecoded = [];   // 배경·오버레이 비트맵. finally에서 함께 해제한다.
+  const assetsUsed = [];
   const usedCells = [];      // 실제로 쓰인 셀별 조정값(계측·검사용). 서버에 저장하지 않는다.
   let canvas = null;
+
+  // 자산 1장을 디코드한다. 못 읽으면 **합성을 실패시키지 않고 건너뛴다** — 프레임 이미지가
+  // 없는 것은 색 프레임으로 계속 갈 수 있는 상태이고, 여기서 던지면 학생이 네컷을 못 만든다.
+  const loadAsset = async function (kind) {
+    const a = assets[kind];
+    if (!a || !a.b64) return null;
+    try {
+      const d = await decodeBase64(a.b64, a.mime);
+      assetDecoded.push(d);
+      assetsUsed.push(kind);
+      return d.source;
+    } catch (e) {
+      return null;
+    }
+  };
 
   try {
     for (const p of photos) {
@@ -220,37 +266,46 @@ export async function composeFourcut(photos, frameId, texts, adjusts, options) {
     }
 
     canvas = document.createElement('canvas');
-    canvas.width = LAYOUT.width;
-    canvas.height = LAYOUT.height;
+    canvas.width = layout.width;
+    canvas.height = layout.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error(COMPOSE_ERROR_TEXT);
 
+    // ⑴ 배경색 — 자산이 없거나 못 읽혔을 때 이것이 최종 배경이다.
     ctx.fillStyle = frame.background;
-    ctx.fillRect(0, 0, LAYOUT.width, LAYOUT.height);
+    ctx.fillRect(0, 0, layout.width, layout.height);
 
-    for (let n = 0; n < LAYOUT.cells; n += 1) {
-      const x = LAYOUT.marginX;
-      const y = cellTop(n);
+    // ⑵ 배경 이미지 — 캔버스 전체를 cover로 덮는다(확정 28-⑴).
+    const bgSource = await loadAsset('background');
+    if (bgSource) drawCoverInto(ctx, bgSource, 0, 0, layout.width, layout.height);
+
+    // ⑶ 칸 4개 — 좌표는 좌표판에서 온다. 칸마다 크기가 달라도 같은 코드가 돈다.
+    for (let n = 0; n < layout.cells.length; n += 1) {
+      const box = cellBoxOf(frame, options, n);
+      const x = box.x;
+      const y = box.y;
       const src = decoded[n].source;
       const sw = src.width || src.naturalWidth;
       const sh = src.height || src.naturalHeight;
       // 조정값이 없으면 그 사진의 자동 기본값(확정 24-⑴·⑶)으로 그린다.
-      const rect = cellRect(sw, sh, (adjusts && adjusts[n]) || newAdjust(sw, sh));
+      const rect = cellRect(sw, sh, (adjusts && adjusts[n]) || newAdjust(sw, sh, box), box);
       ctx.save();
       ctx.fillStyle = frame.cellBackground;
-      ctx.fillRect(x, y, LAYOUT.cellW, LAYOUT.cellH);
+      ctx.fillRect(x, y, box.w, box.h);
       ctx.beginPath();
-      ctx.rect(x, y, LAYOUT.cellW, LAYOUT.cellH);
+      ctx.rect(x, y, box.w, box.h);
       ctx.clip();
       // 「전체 담기」의 남는 여백은 같은 사진의 흐린 확대본으로 채운다(확정 24-⑵).
       if (rect.mode === 'contain') {
-        drawBlurredBackground(ctx, src, x, y, LAYOUT.cellW, LAYOUT.cellH, options);
+        drawBlurredBackground(ctx, src, x, y, box.w, box.h, options);
       }
       ctx.drawImage(src, x + rect.left, y + rect.top, rect.w, rect.h);
       ctx.restore();
-      ctx.strokeStyle = frame.cellBorder;
-      ctx.lineWidth = frame.cellBorderWidth;
-      ctx.strokeRect(x, y, LAYOUT.cellW, LAYOUT.cellH);
+      if (frame.cellBorderWidth > 0) {
+        ctx.strokeStyle = frame.cellBorder;
+        ctx.lineWidth = frame.cellBorderWidth;
+        ctx.strokeRect(x, y, box.w, box.h);
+      }
       usedCells.push({
         locIndex: photos[n].locIndex, sourceW: sw, sourceH: sh,
         mode: rect.mode, scale: rect.scale,
@@ -258,17 +313,29 @@ export async function composeFourcut(photos, frameId, texts, adjusts, options) {
       });
     }
 
-    ctx.fillStyle = frame.accent.color;
-    ctx.fillRect(LAYOUT.marginX, LAYOUT.topBand - 20, LAYOUT.cellW, frame.accent.height);
+    // ⑷ 강조선 — 두께 0이면 그리지 않는다(업로드 프레임의 기본값).
+    if (frame.accent && frame.accent.height > 0) {
+      ctx.fillStyle = frame.accent.color;
+      ctx.fillRect(layout.accent.x, layout.accent.y, layout.accent.w, frame.accent.height);
+    }
 
-    ctx.textAlign = 'center';
-    ctx.fillStyle = frame.topText.color;
-    ctx.font = frame.topText.weight + ' ' + frame.topText.size + 'px system-ui, sans-serif';
-    ctx.fillText(t.top, LAYOUT.width / 2, frame.topText.baseline, LAYOUT.cellW);
+    // ⑸ 문구 — 위치는 좌표판, 색·크기는 프레임. 기성 프레임에 문구가 이미 있으면 건너뛴다.
+    if (!hideTexts) {
+      ctx.textAlign = layout.topText.align;
+      ctx.fillStyle = frame.topText.color;
+      ctx.font = frame.topText.weight + ' ' + frame.topText.size + 'px system-ui, sans-serif';
+      ctx.fillText(t.top, layout.topText.x, layout.topText.baseline, layout.topText.maxWidth);
 
-    ctx.fillStyle = frame.bottomText.color;
-    ctx.font = frame.bottomText.weight + ' ' + frame.bottomText.size + 'px system-ui, sans-serif';
-    ctx.fillText(t.bottom, LAYOUT.width / 2, frame.bottomText.baseline, LAYOUT.cellW);
+      ctx.textAlign = layout.bottomText.align;
+      ctx.fillStyle = frame.bottomText.color;
+      ctx.font = frame.bottomText.weight + ' ' + frame.bottomText.size + 'px system-ui, sans-serif';
+      ctx.fillText(t.bottom, layout.bottomText.x, layout.bottomText.baseline, layout.bottomText.maxWidth);
+    }
+
+    // ⑹ 오버레이 이미지 — 마지막이다. 투명 구멍으로 사진이 보인다(확정 28-⑵).
+    //    투명을 지켜야 하므로 여기서 다시 인코딩하지 않고 그대로 얹는다(§5 금지 22).
+    const overlaySource = await loadAsset('overlay');
+    if (overlaySource) ctx.drawImage(overlaySource, 0, 0, layout.width, layout.height);
 
     const blob = await toBlobAsync(canvas, OUTPUT.mime, OUTPUT.quality);
     if (!blob) throw new Error(COMPOSE_ERROR_TEXT);
@@ -276,12 +343,14 @@ export async function composeFourcut(photos, frameId, texts, adjusts, options) {
 
     return {
       blob: blob, dataUrl: dataUrl,
-      width: LAYOUT.width, height: LAYOUT.height,
-      cells: usedCells
+      width: layout.width, height: layout.height,
+      layoutId: layout.id,
+      cells: usedCells,
+      assetsUsed: assetsUsed
     };
   } finally {
     // 입력 비트맵 4장 + 임시 캔버스를 성공·실패와 무관하게 해제한다.
-    decoded.forEach(function (d) {
+    decoded.concat(assetDecoded).forEach(function (d) {
       if (d.source && typeof d.source.close === 'function') d.source.close();
       if (d.objectUrl) URL.revokeObjectURL(d.objectUrl);
     });
