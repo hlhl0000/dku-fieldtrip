@@ -682,6 +682,10 @@ LAYOUTS.forEach(function (l) {
   o.textContent = l.name;
   assetLayout.appendChild(o);
 });
+// 올린 이미지를 담으라고 만든 프레임에서 시작한다. 기본값이 「검정 포토이즘형」이면
+// 교사가 이미지를 그 프레임에 올려 놓고 미리보기에서는 「업로드한 이미지 프레임」을 골라
+// 「아무것도 안 나온다」가 된다(실측 사건, 2026-08-21).
+if (frameById('custom-upload')) assetFrame.value = 'custom-upload';
 
 function optionsOf(frameId) {
   const e = frameMeta[frameId] || {};
@@ -756,6 +760,20 @@ document.getElementById('asset-options-save').addEventListener('click', async fu
   }
 });
 
+// 원본 비율이 캔버스와 많이 다르면 cover가 가운데만 크게 잘라 낸다. 교사가 올린 그림이
+// 「왜 이렇게 확대됐지」가 되는 자리라, 눈에 보이는 결과를 말로 먼저 알려 준다.
+function cropNote(kind, out, layout) {
+  if (kind !== 'background') return '';
+  if (!out.sourceWidth || !out.sourceHeight) return '';
+  const srcRatio = out.sourceWidth / out.sourceHeight;
+  const dstRatio = layout.width / layout.height;
+  const off = Math.max(srcRatio / dstRatio, dstRatio / srcRatio);
+  if (off < 1.35) return '';
+  return ' 원본 비율(' + out.sourceWidth + '×' + out.sourceHeight + ')이 캔버스(' +
+    layout.width + '×' + layout.height + ')와 많이 달라 가운데만 잘라 채웠습니다 — ' +
+    '잘리는 것이 싫으면 캔버스 비율에 맞춘 그림을 쓰거나, 「덮는 프레임(투명 PNG)」 슬롯을 쓰세요.';
+}
+
 // 파일을 고르면 바로 압축·업로드한다. 좌표판 크기로 맞추므로 원본이 커도 된다.
 async function uploadAsset(kind, input) {
   const file = input.files && input.files[0];
@@ -763,15 +781,19 @@ async function uploadAsset(kind, input) {
   show(assetError, '');
   try {
     const layout = assetTargetSize();
+    const frame = frameById(assetFrame.value);
+    // 배경은 JPEG라 투명을 담지 못한다 — 프레임 배경색을 깔아 검정이 되지 않게 한다.
     const out = await compressFrameAsset(file, kind, layout.width, layout.height, function (t) {
       setText(assetMsg, t);
-    });
+    }, frame && frame.background);
     setText(assetMsg, '올리는 중…');
     await db.admin.setFrameAsset(assetFrame.value, kind, out);
     await reloadFrameMeta();
-    setText(assetMsg, (kind === 'overlay' ? '덮는 프레임' : '배경 사진') + '을 올렸습니다 — ' +
-      out.width + '×' + out.height + ' · ' + Math.round(out.bytes / 1024) + ' KB. ' +
-      '아래 「미리보기 만들기」로 확인하세요.');
+    setText(assetMsg, (kind === 'overlay' ? '덮는 프레임' : '배경 사진') + '을 「' +
+      ((frame && frame.name) || assetFrame.value) + '」에 올렸습니다 — ' +
+      out.width + '×' + out.height + ' · ' + Math.round(out.bytes / 1024) + ' KB.' +
+      cropNote(kind, out, layout) +
+      ' 아래 「미리보기 만들기」로 확인하세요.');
   } catch (e) {
     setText(assetMsg, '');
     show(assetError, explainWriteError(e, e && e.message ? e.message : '이미지를 올리지 못했습니다'));
@@ -815,6 +837,27 @@ FRAMES.forEach(function (f) {
   o.textContent = f.name;
   previewFrame.appendChild(o);
 });
+// 두 선택 칸이 어긋나면 「올려 놓고 안 나온다」가 된다. 위(프레임 이미지)에서 아래로만
+// 맞추던 것을 **양방향**으로 만든다 — 보고 있는 프레임이 곧 손대는 프레임이다.
+previewFrame.value = assetFrame.value;
+previewFrame.addEventListener('change', function () {
+  if (assetFrame.value === previewFrame.value) return;
+  assetFrame.value = previewFrame.value;
+  renderAssetState();
+});
+
+// 이 프레임에는 올린 이미지가 없는데 다른 프레임에는 있을 때, 어디에 있는지 알려 준다.
+function assetsElsewhereNote() {
+  const others = Object.keys(frameMeta).filter(function (id) {
+    const e = frameMeta[id] || {};
+    return id !== previewFrame.value && !!(e.background || e.overlay);
+  });
+  if (!others.length) return '';
+  return ' — 올린 이미지는 ' + others.map(function (id) {
+    const f = frameById(id);
+    return '「' + ((f && f.name) || id) + '」';
+  }).join('·') + '에 저장되어 있습니다. 그 프레임을 고르거나, 위 「프레임 이미지」에서 이 프레임에 올리세요';
+}
 
 // 예시 사진 — 셀 비율(4:3)에 맞춘 단색 그러데이션 + 번호. 실제 사진이 아니라 배치 확인용이다.
 function samplePhoto(hue, label) {
@@ -860,7 +903,7 @@ document.getElementById('preview-btn').addEventListener('click', async function 
     previewImg.hidden = false;
     const used = (res.assetsUsed || []).length
       ? ' · 올린 이미지 ' + res.assetsUsed.map(function (k) { return k === 'overlay' ? '덮는 프레임' : '배경'; }).join('·') + ' 적용'
-      : ' · 올린 이미지 없음(색 프레임)';
+      : ' · 올린 이미지 없음(색 프레임)' + assetsElsewhereNote();
     setText(previewMsg, res.width + ' × ' + res.height + ' — 학생 화면에서 만드는 것과 같은 크기입니다.' + used);
   } catch (e) {
     setText(previewMsg, e && e.message ? e.message : '미리보기를 만들지 못했습니다');

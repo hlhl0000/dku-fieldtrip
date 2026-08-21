@@ -192,12 +192,18 @@ export const FRAME_ASSET_TOO_LARGE_TEXT =
 
 // 캔버스를 목표 크기로 두고 source를 그린다.
 //   background = cover(잘라서 꽉 채움) · overlay = 캔버스에 정확히 맞춤(프레임 도안이므로)
-function drawFrameSource(ctx, source, kind, w, h) {
+// @param {string} [fillColor] 배경 슬롯에서 투명한 자리를 채울 색. 생략하면 흰색.
+function drawFrameSource(ctx, source, kind, w, h, fillColor) {
   ctx.clearRect(0, 0, w, h);
   if (kind === 'overlay') {
     ctx.drawImage(source, 0, 0, w, h);
     return;
   }
+  // 배경은 JPEG로 저장된다 — JPEG에는 투명이 없다. 아무 것도 깔지 않고 투명 PNG를 그리면
+  // 투명한 자리가 **검정**이 되어(실측 0,0,0) 교사가 올린 그림이 검은 판 위에 뜬다.
+  // 프레임의 배경색을 먼저 칠해 두면 색 프레임과 이어지는 모습으로 저장된다.
+  ctx.fillStyle = fillColor || '#ffffff';
+  ctx.fillRect(0, 0, w, h);
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
   const scale = Math.max(w / sw, h / sh);
@@ -213,10 +219,11 @@ function drawFrameSource(ctx, source, kind, w, h) {
  * @param {number} targetW 좌표판 캔버스 너비
  * @param {number} targetH 좌표판 캔버스 높이
  * @param {(text:string)=>void} [onStage] 진행 문구 콜백
+ * @param {string} [fillColor] 배경 슬롯에서 투명한 자리를 채울 색(보통 프레임 배경색)
  * @returns {{b64:string, mime:string, bytes:number, width:number, height:number,
  *            sourceWidth:number, sourceHeight:number, attempts:Array}}
  */
-export async function compressFrameAsset(file, kind, targetW, targetH, onStage) {
+export async function compressFrameAsset(file, kind, targetW, targetH, onStage, fillColor) {
   const isOverlay = kind === 'overlay';
   const mime = isOverlay ? FRAME_ASSET.overlayMime : FRAME_ASSET.backgroundMime;
   let decoded = null;
@@ -239,7 +246,7 @@ export async function compressFrameAsset(file, kind, targetW, targetH, onStage) 
         if (onStage) onStage('프레임을 줄이는 중 (' + w + '×' + h + ')');
         canvas.width = w;
         canvas.height = h;
-        drawFrameSource(ctx, decoded.source, kind, w, h);
+        drawFrameSource(ctx, decoded.source, kind, w, h, fillColor);
         const blob = await toBlobAsync(canvas, mime, undefined);
         if (!blob) throw new Error(DECODE_ERROR_TEXT);
         const b64 = await blobToBase64(blob);
@@ -258,7 +265,7 @@ export async function compressFrameAsset(file, kind, targetW, targetH, onStage) 
     // 배경 — JPEG 품질 루프. 캔버스 크기는 좌표판 그대로 둔다.
     canvas.width = targetW;
     canvas.height = targetH;
-    drawFrameSource(ctx, decoded.source, kind, targetW, targetH);
+    drawFrameSource(ctx, decoded.source, kind, targetW, targetH, fillColor);
     for (let q = FRAME_ASSET.jpegQualityStart; q >= FRAME_ASSET.jpegQualityMin - 1e-9; q -= FRAME_ASSET.qualityStep) {
       const quality = Math.round(q * 100) / 100;
       if (onStage) onStage('배경을 줄이는 중 (품질 ' + quality + ')');
