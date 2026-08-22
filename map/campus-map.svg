@@ -3,36 +3,96 @@
 <desc id="mapDesc">빈티지 여행로그풍 손그림 일러스트 지도. 위쪽은 캠퍼스 언덕 위(법화산 능선·대운동장·석주선기념박물관·난파기념음악관·단국역사관), 가운데는 평화의 광장과 곰상·퇴계기념중앙도서관·들샘길, 아래쪽은 정문과 그 바깥의 죽전역 방면(용인포은아트홀·보정동 카페거리·탄천). 방위 정렬 지도가 아니라 오르막 동선 모식도이며, 캠퍼스 밖 두 곳은 모두 죽전역에서 갈라져 간다.</desc>
 
 <style>
-  .ink   { fill: none; stroke: #6f5f47; stroke-linecap: round; stroke-linejoin: round; }
-  .ink2  { fill: none; stroke: #907d5f; stroke-linecap: round; stroke-linejoin: round; }
+  .ink   { fill: none; stroke: #4d3a27; stroke-linecap: round; stroke-linejoin: round; }
+  .ink2  { fill: none; stroke: #765f40; stroke-linecap: round; stroke-linejoin: round; }
   .thin  { stroke-width: 1.6; }
   .med   { stroke-width: 2.4; }
-  .wall  { fill: #f3e8cd; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
-  .wall2 { fill: #e9dbb6; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
-  .roof  { fill: #cf9057; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
-  .roof2 { fill: #b0703c; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
-  .roof3 { fill: #9d8f6a; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
-  .leaf  { fill: #8ea578; stroke: #5f7550; stroke-width: 1.8; stroke-linejoin: round; }
-  .leaf2 { fill: #9db089; stroke: #5f7550; stroke-width: 1.8; stroke-linejoin: round; }
+  .wall  { fill: #ddc38f; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .wall2 { fill: #c7a873; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .roof  { fill: #a95d31; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .roof2 { fill: #874725; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .roof3 { fill: #786b4a; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .leaf  { fill: #6f7c4f; stroke: #3f4a31; stroke-width: 1.6; stroke-linejoin: round; }
+  .leaf2 { fill: #879064; stroke: #3f4a31; stroke-width: 1.6; stroke-linejoin: round; }
   .trunk { fill: none; stroke: #8a6b46; stroke-width: 3; stroke-linecap: round; }
-  .shadow{ fill: #e2d5b0; opacity: .7; }
+  .shadow{ fill: #8c7148; opacity: .22; }
+  .stone { fill: #d7bd86; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .side  { fill: #ae8d5c; stroke: #4d3a27; stroke-width: 2.2; stroke-linejoin: round; }
+  .window{ fill: #4f4939; stroke: #3b2e21; stroke-width: 1.1; }
+  .etch  { fill: none; stroke: #59442d; stroke-width: 1.05; stroke-linecap: round; opacity: .58; }
+  .mortar{ fill: none; stroke: #8d7048; stroke-width: .85; opacity: .55; }
   .t     { font-family: 'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR','Nanum Gothic','Helvetica Neue',sans-serif; }
-  .lbl   { font-size: 25px; font-weight: 700; fill: #5d4d38; text-anchor: middle;
-           paint-order: stroke; stroke: #f5edd8; stroke-width: 6px; stroke-linejoin: round; }
+  .lbl   { font-size: 25px; font-weight: 800; fill: #443323; text-anchor: middle;
+           paint-order: stroke; stroke: #ead9b4; stroke-width: 6px; stroke-linejoin: round; }
   .sub   { font-size: 17px; font-weight: 600; fill: #8a7757; text-anchor: middle;
            paint-order: stroke; stroke: #f5edd8; stroke-width: 5px; stroke-linejoin: round; }
-  .tiny  { font-size: 15px; font-weight: 600; fill: #988563; text-anchor: middle;
-           paint-order: stroke; stroke: #f5edd8; stroke-width: 4px; stroke-linejoin: round; }
-  .ttl   { font-size: 38px; font-weight: 800; fill: #fdf6e3; text-anchor: middle; letter-spacing: 1.5px; }
-  .ttl2  { font-size: 17px; font-weight: 700; fill: #f3d9bd; text-anchor: middle; letter-spacing: 5px; }
-  .path  { fill: none; stroke: #b0713f; stroke-width: 5; stroke-linecap: round;
-           stroke-dasharray: 2 15; opacity: .85; }
-  .path2 { fill: none; stroke: #a2854f; stroke-width: 4; stroke-linecap: round;
-           stroke-dasharray: 2 13; opacity: .8; }
-  .water { fill: none; stroke: #86adba; stroke-linecap: round; stroke-linejoin: round; }
+  .tiny  { font-size: 15px; font-weight: 650; fill: #765f40; text-anchor: middle;
+           paint-order: stroke; stroke: #ead9b4; stroke-width: 4px; stroke-linejoin: round; }
+  .ttl   { font-size: 38px; font-weight: 800; fill: #4a3724; text-anchor: middle; letter-spacing: 1.5px; }
+  .ttl2  { font-size: 17px; font-weight: 700; fill: #765633; text-anchor: middle; letter-spacing: 5px; }
+  .path  { fill: none; stroke: #80502e; stroke-width: 4.5; stroke-linecap: round;
+           stroke-dasharray: 1 13; opacity: .9; }
+  .path2 { fill: none; stroke: #785f35; stroke-width: 3.8; stroke-linecap: round;
+           stroke-dasharray: 1 12; opacity: .86; }
+  .water { fill: none; stroke: #5e8790; stroke-linecap: round; stroke-linejoin: round; }
+  .contour { fill: none; stroke: #9e8d68; stroke-linecap: round; stroke-linejoin: round; }
+  .scratch { fill: none; stroke: #f7efd9; stroke-linecap: round; opacity: .34; }
+  g[id^="lm-"] > g:first-child { filter: url(#sketchLift); }
 </style>
 
 <defs>
+  <radialGradient id="paperBase" cx="48%" cy="42%" r="78%">
+    <stop offset="0" stop-color="#f8f1df"/>
+    <stop offset=".68" stop-color="#f2e7cd"/>
+    <stop offset="1" stop-color="#dfcda9"/>
+  </radialGradient>
+  <linearGradient id="campusWash" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#eee3c1"/>
+    <stop offset=".55" stop-color="#eadcb5"/>
+    <stop offset="1" stop-color="#e4d3a8"/>
+  </linearGradient>
+  <linearGradient id="mountainWash" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#d8cea9"/>
+    <stop offset="1" stop-color="#b8aa7f"/>
+  </linearGradient>
+  <filter id="paperFibre" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency=".006 .085" numOctaves="3" seed="17"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .38  0 0 0 0 .29  0 0 0 0 .17  0 0 0 .16 0"/>
+  </filter>
+  <filter id="sketchLift" x="-18%" y="-22%" width="136%" height="150%">
+    <feTurbulence type="fractalNoise" baseFrequency=".032" numOctaves="2" seed="7" result="noise"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.05" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feDropShadow in="rough" dx="1.4" dy="2.3" stdDeviation="1.2" flood-color="#5d4d38" flood-opacity=".18"/>
+  </filter>
+  <pattern id="roofHatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
+    <rect width="7" height="7" fill="#97502c"/>
+    <path d="M0 1 H7 M0 5 H7" stroke="#5a3824" stroke-width=".7" opacity=".55"/>
+  </pattern>
+  <pattern id="brickHatch" width="12" height="8" patternUnits="userSpaceOnUse">
+    <rect width="12" height="8" fill="#d2b47e"/>
+    <path d="M0 0 H12 M0 4 H12 M6 0 V4 M3 4 V8 M9 4 V8" stroke="#8f6e43" stroke-width=".55" opacity=".55"/>
+  </pattern>
+  <pattern id="engrave" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+    <path d="M0 2 H10 M0 7 H10" stroke="#60492f" stroke-width=".65" opacity=".28"/>
+  </pattern>
+  <symbol id="arch-window" viewBox="0 0 12 20">
+    <path d="M1 19 V8 A5 5 0 0 1 11 8 V19 Z" class="window"/>
+    <path d="M6 3 V19 M1 11 H11" class="etch" opacity=".7"/>
+  </symbol>
+  <symbol id="sq-window" viewBox="0 0 12 16">
+    <rect x="1" y="1" width="10" height="14" rx="1" class="window"/>
+    <path d="M6 1 V15 M1 8 H11" stroke="#c9b788" stroke-width=".8" opacity=".75"/>
+  </symbol>
+  <symbol id="corner-ornament" viewBox="0 0 54 54">
+    <path d="M3 51 C3 28 12 15 28 15 C17 11 16 5 20 3 C30 7 34 14 34 24 C39 14 46 11 51 15 C47 25 41 30 31 31 C18 33 12 39 9 51 Z" fill="none" stroke="#5a4229" stroke-width="2"/>
+    <path d="M9 43 C18 34 27 29 42 27 M18 14 C24 19 27 24 28 31" class="etch"/>
+    <circle cx="8" cy="46" r="3" fill="#8d6136" stroke="#4d3a27" stroke-width="1"/>
+  </symbol>
+  <symbol id="tree-cluster" viewBox="0 0 70 55">
+    <path d="M12 52 L18 31 M34 53 L35 25 M55 52 L50 30" class="trunk" stroke-width="2"/>
+    <path d="M2 34 C-1 22 8 14 18 17 C19 6 33 4 38 15 C48 10 60 18 57 29 C66 36 58 46 46 43 C36 50 24 45 21 41 C10 46 3 42 2 34 Z" class="leaf"/>
+    <g class="etch" opacity=".55"><path d="M8 29 C20 35 29 30 35 20"/><path d="M28 39 C38 31 48 31 55 36"/><path d="M17 20 C22 25 26 26 31 25"/></g>
+  </symbol>
   <symbol id="tr-round" viewBox="0 0 40 50">
     <path class="trunk" d="M20 50 L20 33"/>
     <path class="leaf" d="M20 3 C31 3 38 12 36 21 C41 28 36 37 27 37 L13 37 C4 37 -1 28 4 21 C2 12 9 3 20 3 Z"/>
@@ -45,6 +105,16 @@
   <symbol id="bush" viewBox="0 0 46 26">
     <path class="leaf2" d="M4 25 C0 16 7 8 14 11 C16 2 29 1 33 9 C42 8 46 18 41 25 Z"/>
   </symbol>
+  <symbol id="tr-lean" viewBox="0 0 44 56">
+    <path class="trunk" d="M20 56 C20 43 23 36 27 29"/>
+    <path class="leaf2" d="M7 34 C1 27 5 17 14 17 C13 7 24 1 31 7 C40 6 45 16 40 23 C46 31 38 40 28 38 C20 44 9 42 7 34 Z"/>
+    <path class="ink2 thin" d="M13 24 C22 27 30 24 36 18"/>
+  </symbol>
+  <symbol id="tr-cypress" viewBox="0 0 30 58">
+    <path class="trunk" d="M15 58 L15 47"/>
+    <path class="leaf" d="M15 2 C23 10 25 19 21 25 C27 33 24 45 15 49 C6 45 3 33 9 25 C5 19 7 10 15 2 Z"/>
+    <path class="ink2 thin" d="M15 12 L15 42"/>
+  </symbol>
   <pattern id="grain" width="46" height="46" patternUnits="userSpaceOnUse">
     <circle cx="7"  cy="9"  r="1.1" fill="#d9caa3" opacity=".45"/>
     <circle cx="31" cy="20" r="1.5" fill="#d9caa3" opacity=".35"/>
@@ -54,24 +124,45 @@
 </defs>
 
 <!-- ══ 종이 바탕 ══════════════════════════════════════════════════════════ -->
-<rect x="0" y="0" width="900" height="1300" fill="#f5edd8"/>
+<rect x="0" y="0" width="900" height="1300" fill="url(#paperBase)"/>
 <rect x="0" y="0" width="900" height="1300" fill="url(#grain)"/>
+<rect x="0" y="0" width="900" height="1300" filter="url(#paperFibre)" opacity=".72"/>
 <ellipse cx="70"  cy="80"   rx="90"  ry="60" fill="#e7d9b4" opacity=".35"/>
 <ellipse cx="840" cy="1230" rx="100" ry="66" fill="#e7d9b4" opacity=".3"/>
 <ellipse cx="860" cy="60"   rx="70"  ry="46" fill="#e7d9b4" opacity=".25"/>
+<path d="M452 44 C447 214 456 378 450 546 C446 702 456 876 451 1034 C448 1122 454 1200 450 1258"
+      fill="none" stroke="#9f8b67" stroke-width="2.2" opacity=".11"/>
+<path d="M40 786 C226 781 364 790 532 786 C666 783 770 789 860 784"
+      fill="none" stroke="#fff9eb" stroke-width="4" opacity=".2"/>
+<path d="M39 790 C224 786 365 794 533 790 C668 787 770 793 861 788"
+      fill="none" stroke="#8a7757" stroke-width="1.2" opacity=".12"/>
+<path d="M0 0 L86 0 L0 82 Z" fill="#b88a55" opacity=".08"/>
+<path d="M900 1300 L812 1300 L900 1216 Z" fill="#8c5b34" opacity=".07"/>
 
 <!-- ══ 테두리 ════════════════════════════════════════════════════════════ -->
-<rect x="26" y="26" width="848" height="1248" rx="12" fill="none" stroke="#6f5f47" stroke-width="5"/>
-<rect x="40" y="40" width="820" height="1220" rx="7"  fill="none" stroke="#b09b74" stroke-width="2"/>
+<rect x="22" y="22" width="856" height="1256" rx="8" fill="none" stroke="#4d3a27" stroke-width="4"/>
+<rect x="31" y="31" width="838" height="1238" rx="5" fill="none" stroke="#8e6b3f" stroke-width="1.7"/>
+<rect x="38" y="38" width="824" height="1224" rx="3" fill="none" stroke="#4d3a27" stroke-width=".9" stroke-dasharray="2 6" opacity=".7"/>
 <g fill="#6f5f47" opacity=".8">
   <circle cx="26" cy="26" r="6"/><circle cx="874" cy="26" r="6"/>
   <circle cx="26" cy="1274" r="6"/><circle cx="874" cy="1274" r="6"/>
 </g>
+<g opacity=".92">
+  <use href="#corner-ornament" x="24" y="24" width="48" height="48"/>
+  <use href="#corner-ornament" x="828" y="24" width="48" height="48" transform="rotate(90 852 48)"/>
+  <use href="#corner-ornament" x="24" y="1228" width="48" height="48" transform="rotate(-90 48 1252)"/>
+  <use href="#corner-ornament" x="828" y="1228" width="48" height="48" transform="rotate(180 852 1252)"/>
+</g>
 
 <!-- ══ 제목 리본 ═════════════════════════════════════════════════════════ -->
 <g>
-  <path d="M96 62 L804 62 L826 101 L804 140 L96 140 L74 101 Z" fill="#8c5b34" stroke="#6f5f47" stroke-width="3"/>
-  <path d="M104 70 L796 70 L814 101 L796 132 L104 132 L86 101 Z" fill="none" stroke="#e6c9a4" stroke-width="1.6" opacity=".8"/>
+  <path d="M112 58 H788 L824 76 L838 101 L824 126 L788 144 H112 L76 126 L62 101 L76 76 Z"
+        fill="#ddc18b" stroke="#4d3a27" stroke-width="3"/>
+  <path d="M124 66 H776 L809 82 L820 101 L809 120 L776 136 H124 L91 120 L80 101 L91 82 Z"
+        fill="none" stroke="#8e6438" stroke-width="1.6"/>
+  <path d="M101 76 C116 86 116 116 101 126 M799 76 C784 86 784 116 799 126" class="etch" stroke-width="1.6"/>
+  <path d="M422 58 C428 47 442 43 450 53 C458 43 472 47 478 58" fill="none" stroke="#4d3a27" stroke-width="2"/>
+  <circle cx="450" cy="52" r="4" fill="#a86536" stroke="#4d3a27" stroke-width="1.2"/>
   <text class="t ttl" x="450" y="105">단국대학교 죽전캠퍼스 현장체험학습</text>
   <text class="t ttl2" x="450" y="129">TRAVEL LOG · 2026</text>
 </g>
@@ -81,7 +172,7 @@
   <path d="M56 300 C120 236 168 214 218 240 C258 190 316 176 360 214
            C410 168 470 166 512 208 C560 164 626 172 664 216
            C712 186 776 200 812 246 C834 266 842 284 844 300 Z"
-        fill="#cfc39c" stroke="#6f5f47" stroke-width="2.6" stroke-linejoin="round"/>
+        fill="url(#mountainWash)" stroke="#6f5f47" stroke-width="2.6" stroke-linejoin="round"/>
   <g class="ink2 thin" opacity=".75">
     <path d="M218 240 C246 262 266 280 278 300"/>
     <path d="M360 214 C384 244 402 272 412 300"/>
@@ -90,17 +181,47 @@
   </g>
   <path d="M330 206 L360 214 L390 206" class="ink2 thin"/>
   <path d="M482 200 L512 208 L542 200" class="ink2 thin"/>
+  <g class="scratch" stroke-width="3">
+    <path d="M86 278 C134 238 168 229 202 244"/>
+    <path d="M244 229 C278 197 320 191 350 212"/>
+    <path d="M390 207 C430 179 476 181 500 205"/>
+    <path d="M548 204 C585 176 628 184 650 211"/>
+    <path d="M698 219 C742 199 778 215 804 246"/>
+  </g>
+  <g class="contour" stroke-width="1.15" opacity=".5">
+    <path d="M104 292 C160 254 202 257 240 282"/>
+    <path d="M266 286 C310 245 350 242 392 278"/>
+    <path d="M424 282 C466 240 508 239 550 277"/>
+    <path d="M582 284 C622 244 670 244 712 278"/>
+    <path d="M734 278 C770 254 806 263 830 286"/>
+  </g>
+  <g fill="url(#engrave)" opacity=".72">
+    <path d="M58 299 C122 238 168 218 218 241 C260 194 314 181 360 216 C412 171 467 170 512 210 C561 168 624 177 664 219 C711 190 772 203 810 247 C829 266 839 283 842 299 Z"/>
+  </g>
+  <g class="etch" opacity=".5">
+    <path d="M82 269 C138 224 177 220 211 242"/><path d="M246 230 C286 187 329 186 359 214"/>
+    <path d="M386 220 C430 166 477 176 511 207"/><path d="M540 218 C585 166 630 183 662 216"/>
+    <path d="M690 230 C733 190 781 215 816 257"/>
+    <path d="M118 286 l18 -17 M148 276 l20 -21 M286 269 l22 -27 M446 267 l22 -29 M607 269 l20 -28 M754 270 l16 -20"/>
+  </g>
   <text class="t sub" x="770" y="276">법화산</text>
 </g>
 
 <!-- ══ 캠퍼스 지면 ═══════════════════════════════════════════════════════ -->
 <path d="M58 292 L842 292 L842 902 C700 916 560 920 450 920 C340 920 200 916 58 902 Z"
-      fill="#ece0bd" stroke="none"/>
+      fill="url(#campusWash)" stroke="none"/>
 <g class="ink2 thin" opacity=".5">
   <path d="M64 400 C220 384 330 392 450 388 C580 384 700 392 836 382"/>
   <path d="M64 530 C210 514 340 522 450 518 C570 514 700 522 836 512"/>
   <path d="M64 656 C210 642 330 650 450 646 C580 642 700 650 836 638"/>
   <path d="M64 782 C210 770 330 778 450 774 C580 770 700 778 836 766"/>
+</g>
+<g class="contour" stroke-width="1" opacity=".24">
+  <path d="M86 345 C126 329 162 331 194 346"/>
+  <path d="M714 432 C754 417 792 420 824 438"/>
+  <path d="M78 566 C118 548 156 553 190 570"/>
+  <path d="M688 692 C732 675 778 679 818 698"/>
+  <path d="M116 822 C166 802 214 808 254 826"/>
 </g>
 
 <!-- 오르막 방향 (나침반은 그리지 않는다 — 방위 미확정, map-reference §1-1) -->
@@ -128,48 +249,67 @@
 
 <!-- ══ 장식 (핀이 붙지 않음 — lm- 접두를 쓰지 않는다) ════════════════════ -->
 <g transform="translate(196 336)">
-  <ellipse class="shadow" cx="0" cy="30" rx="66" ry="11"/>
-  <path class="wall" d="M-58 30 L-58 -14 L-6 -14 L-6 30 Z"/>
-  <path class="wall2" d="M-2 30 L-2 -2 L44 -2 L44 30 Z"/>
-  <path class="roof3" d="M-64 -14 L-32 -34 L0 -14 Z"/>
-  <path class="roof3" d="M-6 -2 L21 -18 L48 -2 Z"/>
-  <g class="ink2 thin"><path d="M-46 -2 l0 12 M-30 -2 l0 12 M-16 -2 l0 12 M10 10 l0 10 M28 10 l0 10"/></g>
+  <ellipse class="shadow" cx="0" cy="30" rx="70" ry="12"/>
+  <path class="side" d="M-60 -12 L-45 -22 L-45 24 L-60 30 Z"/>
+  <path class="wall" d="M-45 -22 H-2 V30 H-45 Z" fill="url(#brickHatch)"/>
+  <path class="side" d="M3 -5 L17 -15 V27 L3 31 Z"/>
+  <path class="wall2" d="M17 -15 H48 V27 H17 Z"/>
+  <path d="M-63 -12 L-38 -38 L4 -22 L-2 -10 L-45 -22 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+  <path class="roof3" d="M2 -5 L24 -28 L51 -14 L48 -3 L17 -15 Z"/>
+  <use href="#arch-window" x="-35" y="-7" width="11" height="18"/><use href="#arch-window" x="-18" y="-7" width="11" height="18"/>
+  <use href="#sq-window" x="23" y="-3" width="10" height="14"/>
+  <path class="etch" d="M-58 17 L-47 13 M6 19 L16 16 M-37 -32 L-8 -21 M15 -14 L39 -13"/>
   <text class="t tiny" x="0" y="52">기숙사 · 무용관 · 후문</text>
 </g>
 <g transform="translate(676 604)">
-  <ellipse class="shadow" cx="0" cy="24" rx="46" ry="9"/>
-  <path class="wall" d="M-36 24 L-36 -16 L36 -16 L36 24 Z"/>
-  <path class="roof3" d="M-42 -16 L0 -38 L42 -16 Z"/>
-  <g class="ink2 thin"><path d="M-22 -4 l0 12 M0 -4 l0 12 M22 -4 l0 12"/></g>
+  <ellipse class="shadow" cx="0" cy="24" rx="50" ry="10"/>
+  <path class="side" d="M-39 -10 L-26 -20 L-26 24 L-39 28 Z"/>
+  <path class="wall" d="M-26 -20 H38 V24 H-26 Z" fill="url(#brickHatch)"/>
+  <path d="M-43 -10 L-19 -38 L44 -20 L38 -10 L-26 -20 Z" fill="#746442" stroke="#4d3a27" stroke-width="2.2"/>
+  <path class="stone" d="M-7 24 V5 A10 10 0 0 1 13 5 V24 Z"/>
+  <use href="#arch-window" x="-20" y="-8" width="10" height="17"/><use href="#arch-window" x="20" y="-8" width="10" height="17"/>
+  <path class="etch" d="M-34 16 L-27 14 M-10 -31 L29 -20 M-23 17 H36"/>
   <text class="t tiny" x="0" y="44">법학관</text>
 </g>
 <g transform="translate(716 752)">
-  <ellipse class="shadow" cx="0" cy="26" rx="86" ry="10"/>
-  <path class="wall" d="M-76 26 L-76 -10 L-40 -10 L-40 26 Z"/>
-  <path class="wall2" d="M-38 26 L-38 -18 L-2 -18 L-2 26 Z"/>
-  <path class="wall" d="M0 26 L0 -12 L36 -12 L36 26 Z"/>
-  <path class="wall2" d="M38 26 L38 -20 L74 -20 L74 26 Z"/>
-  <g class="ink2 thin"><path d="M-64 2 l0 10 M-52 2 l0 10 M-26 -4 l0 10 M-14 -4 l0 10 M12 0 l0 10 M24 0 l0 10 M50 -6 l0 10 M62 -6 l0 10"/></g>
+  <ellipse class="shadow" cx="0" cy="27" rx="90" ry="11"/>
+  <path class="side" d="M-80 -5 L-69 -14 V25 L-80 29 Z"/>
+  <path class="wall" d="M-69 -14 H-35 V25 H-69 Z"/>
+  <path class="wall2" d="M-33 -22 H3 V25 H-33 Z" fill="url(#brickHatch)"/>
+  <path class="wall" d="M5 -16 H39 V25 H5 Z"/>
+  <path class="wall2" d="M41 -25 H76 V25 H41 Z" fill="url(#brickHatch)"/>
+  <path class="roof3" d="M-74 -14 L-52 -28 L-30 -14 Z M-38 -22 L-15 -38 L8 -22 Z M0 -16 L22 -31 L44 -16 Z M36 -25 L59 -42 L82 -25 Z"/>
+  <g><use href="#sq-window" x="-63" y="-7" width="9" height="14"/><use href="#sq-window" x="-50" y="-7" width="9" height="14"/>
+  <use href="#arch-window" x="-25" y="-11" width="9" height="16"/><use href="#arch-window" x="-11" y="-11" width="9" height="16"/>
+  <use href="#sq-window" x="12" y="-8" width="9" height="14"/><use href="#sq-window" x="26" y="-8" width="9" height="14"/>
+  <use href="#arch-window" x="48" y="-14" width="9" height="16"/><use href="#arch-window" x="62" y="-14" width="9" height="16"/></g>
   <text class="t tiny" x="0" y="48">사회과학관 · 공학관</text>
 </g>
 <g transform="translate(166 856)">
-  <ellipse class="shadow" cx="0" cy="24" rx="76" ry="10"/>
-  <path class="wall" d="M-66 24 L-66 -16 L-24 -16 L-24 24 Z"/>
-  <path class="wall2" d="M-22 24 L-22 -22 L20 -22 L20 24 Z"/>
-  <path class="wall" d="M22 24 L22 -14 L64 -14 L64 24 Z"/>
-  <g class="ink2 thin"><path d="M-54 -2 l0 12 M-38 -2 l0 12 M-10 -8 l0 12 M6 -8 l0 12 M34 0 l0 12 M50 0 l0 12"/></g>
+  <ellipse class="shadow" cx="0" cy="25" rx="80" ry="11"/>
+  <path class="side" d="M-70 -9 L-57 -18 V24 L-70 29 Z"/>
+  <path class="wall" d="M-57 -18 H-18 V24 H-57 Z" fill="url(#brickHatch)"/>
+  <path class="wall2" d="M-16 -25 H22 V24 H-16 Z"/>
+  <path class="wall" d="M24 -16 H66 V24 H24 Z" fill="url(#brickHatch)"/>
+  <path class="roof3" d="M-65 -18 L-38 -36 L-10 -18 Z M-23 -25 L3 -44 L29 -25 Z M17 -16 L45 -34 L73 -16 Z"/>
+  <use href="#arch-window" x="-49" y="-9" width="10" height="17"/><use href="#arch-window" x="-33" y="-9" width="10" height="17"/>
+  <use href="#sq-window" x="-8" y="-14" width="10" height="15"/><use href="#sq-window" x="8" y="-14" width="10" height="15"/>
+  <use href="#arch-window" x="33" y="-7" width="10" height="17"/><use href="#arch-window" x="50" y="-7" width="10" height="17"/>
   <text class="t tiny" x="0" y="44">인문 · 상경 · 사범관</text>
 </g>
 <g transform="translate(706 862)">
-  <ellipse class="shadow" cx="0" cy="20" rx="50" ry="9"/>
-  <path class="wall" d="M-40 20 L-40 -14 L4 -14 L4 20 Z"/>
-  <path class="wall2" d="M6 20 L6 -4 L40 -4 L40 20 Z"/>
-  <g class="ink2 thin"><path d="M-28 -2 l0 10 M-12 -2 l0 10 M18 6 l0 8"/></g>
+  <ellipse class="shadow" cx="0" cy="21" rx="52" ry="9"/>
+  <path class="side" d="M-43 -9 L-31 -17 V20 L-43 24 Z"/>
+  <path class="wall" d="M-31 -17 H8 V20 H-31 Z"/>
+  <path class="wall2" d="M10 -7 H42 V20 H10 Z" fill="url(#brickHatch)"/>
+  <path class="roof3" d="M-38 -17 L-12 -34 L14 -17 Z M4 -7 L26 -22 L48 -7 Z"/>
+  <use href="#sq-window" x="-23" y="-9" width="9" height="14"/><use href="#sq-window" x="-8" y="-9" width="9" height="14"/>
+  <use href="#arch-window" x="20" y="-2" width="9" height="15"/>
   <text class="t tiny" x="0" y="40">SW ICT관 · 미디어센터</text>
 </g>
 
 <!-- 나무·수풀 -->
-<g opacity=".95">
+<g opacity=".94">
   <use href="#tr-pine"  x="116" y="400" width="38" height="52"/>
   <use href="#tr-round" x="304" y="330" width="40" height="50"/>
   <use href="#tr-pine"  x="784" y="368" width="38" height="52"/>
@@ -183,19 +323,41 @@
   <use href="#bush" x="626" y="654" width="46" height="26"/>
   <use href="#bush" x="504" y="866" width="46" height="26"/>
   <use href="#bush" x="176" y="486" width="46" height="26"/>
+  <use href="#tr-lean" x="740" y="544" width="40" height="51"/>
+  <use href="#tr-cypress" x="250" y="384" width="26" height="50"/>
+  <use href="#tr-lean" x="118" y="748" width="37" height="47"/>
+  <use href="#tr-cypress" x="760" y="804" width="24" height="46"/>
+  <use href="#bush" x="90" y="438" width="35" height="20"/>
+  <use href="#bush" x="756" y="592" width="39" height="22"/>
+  <use href="#tree-cluster" x="82" y="348" width="58" height="46"/>
+  <use href="#tree-cluster" x="276" y="428" width="54" height="43"/>
+  <use href="#tree-cluster" x="752" y="318" width="60" height="47"/>
+  <use href="#tree-cluster" x="94" y="530" width="55" height="44"/>
+  <use href="#tree-cluster" x="736" y="500" width="58" height="46"/>
+  <use href="#tree-cluster" x="278" y="608" width="52" height="41"/>
+  <use href="#tree-cluster" x="762" y="716" width="57" height="45"/>
+  <use href="#tree-cluster" x="76" y="792" width="55" height="44"/>
 </g>
 
 <!-- ══ ① 대운동장 — 캠퍼스에서 가장 높은 곳 ══════════════════════════════ -->
 <g id="lm-field">
   <g transform="translate(648 325)">
-    <ellipse class="shadow" cx="0" cy="34" rx="76" ry="12"/>
-    <ellipse cx="0" cy="8" rx="70" ry="34" fill="#c8794f" stroke="#6f5f47" stroke-width="2.6"/>
-    <ellipse cx="0" cy="8" rx="54" ry="23" fill="#9db089" stroke="#6f5f47" stroke-width="2.2"/>
-    <path class="ink2 thin" d="M-54 8 L54 8"/>
-    <path class="wall2" style="fill:#f7efd9" d="M-24 -30 L24 -30 L18 -18 L-18 -18 Z"/>
-    <path class="ink2 thin" d="M-12 -30 L-8 -18 M0 -30 L0 -18 M12 -30 L8 -18"/>
-    <path class="ink med" d="M-46 -22 L-46 -44"/>
-    <path class="roof2" d="M-46 -44 L-20 -38 L-46 -32 Z"/>
+    <ellipse class="shadow" cx="0" cy="37" rx="82" ry="14"/>
+    <ellipse cx="0" cy="8" rx="76" ry="38" fill="#8d4f2e" stroke="#4d3a27" stroke-width="2.4"/>
+    <ellipse cx="0" cy="8" rx="66" ry="31" fill="#c18a52" stroke="#4d3a27" stroke-width="1.7"/>
+    <ellipse cx="0" cy="8" rx="52" ry="23" fill="#75825a" stroke="#4d3a27" stroke-width="1.8"/>
+    <g class="etch" opacity=".78">
+      <ellipse cx="0" cy="8" rx="70" ry="34"/><ellipse cx="0" cy="8" rx="61" ry="28"/>
+      <path d="M-52 8 H52 M0 -15 V31 M-22 -13 V29 M22 -13 V29"/>
+    </g>
+    <g class="stone">
+      <path d="M-31 -29 H30 L25 -15 H-26 Z"/>
+      <path d="M-36 -15 H35 L31 -8 H-32 Z"/>
+    </g>
+    <g class="etch"><path d="M-20 -29 L-16 -15 M-8 -29 L-6 -15 M5 -29 L6 -15 M18 -29 L16 -15"/></g>
+    <path class="ink med" d="M-54 -16 V-45"/>
+    <path d="M-54 -45 L-24 -38 L-54 -30 Z" fill="#9c4e2a" stroke="#4d3a27" stroke-width="1.8"/>
+    <path class="etch" d="M-48 -39 L-31 -36"/>
   </g>
   <text class="t lbl" x="648" y="397">대운동장</text>
   <text class="t tiny" x="648" y="419">캠퍼스에서 가장 높은 곳</text>
@@ -204,17 +366,21 @@
 <!-- ══ ② 석주선기념박물관 ════════════════════════════════════════════════ -->
 <g id="lm-museum">
   <g transform="translate(207 455)">
-    <ellipse class="shadow" cx="0" cy="34" rx="70" ry="12"/>
-    <path class="wall" d="M-52 34 L-52 -10 L52 -10 L52 34 Z"/>
-    <path class="roof2" d="M-62 -10 L0 -46 L62 -10 Z"/>
-    <path class="ink2 med" d="M-62 -10 L62 -10"/>
-    <g class="ink2 med"><path d="M-38 34 L-38 -6 M-19 34 L-19 -6 M0 34 L0 -6 M19 34 L19 -6 M38 34 L38 -6"/></g>
-    <path class="ink thin" d="M-54 34 L54 34"/>
-    <path class="wall2" style="fill:#dfd0a8" d="M-16 -20 L16 -20 L16 -12 L-16 -12 Z"/>
-    <g transform="translate(-72 22)">
-      <path class="wall2" style="stroke-width:1.8" d="M-11 12 L-11 6 L11 6 L11 12 Z"/>
-      <path class="wall2" style="fill:#ddd0ab;stroke-width:1.8" d="M-8 6 C-8 -6 8 -6 8 6 Z"/>
-      <circle cx="0" cy="-8" r="6" fill="#ddd0ab" stroke="#6f5f47" stroke-width="1.8"/>
+    <ellipse class="shadow" cx="2" cy="38" rx="78" ry="14"/>
+    <path class="side" d="M-58 -7 L-40 -20 V31 L-58 38 Z"/>
+    <path d="M-40 -20 H54 V31 H-40 Z" fill="url(#brickHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path d="M-64 -7 L-20 -52 L64 -23 L54 -10 L-40 -20 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.5"/>
+    <path class="stone" d="M-24 -22 L8 -43 L42 -22 L36 -14 L-17 -14 Z"/>
+    <path class="stone" d="M-26 31 V-11 H43 V31 Z"/>
+    <g fill="#d9bf8b" stroke="#4d3a27" stroke-width="1.4">
+      <path d="M-20 -10 H-14 V31 H-20 Z"/><path d="M-7 -10 H-1 V31 H-7 Z"/><path d="M7 -10 H13 V31 H7 Z"/><path d="M21 -10 H27 V31 H21 Z"/><path d="M35 -10 H41 V31 H35 Z"/>
+    </g>
+    <path class="stone" d="M-30 31 H48 L42 37 H-36 Z"/>
+    <path class="etch" d="M-53 4 L-41 0 M-53 14 L-41 10 M-53 24 L-41 20 M-18 -4 H39 M-17 9 H40 M-17 22 H40"/>
+    <g transform="translate(-70 18)">
+      <path class="stone" d="M-12 16 H12 V10 H8 C8 0 -8 0 -8 10 H-12 Z"/>
+      <circle cx="0" cy="-5" r="7" fill="#a78452" stroke="#4d3a27" stroke-width="1.6"/>
+      <path class="etch" d="M-4 -8 L4 -2 M-4 -2 L4 -8"/>
     </g>
   </g>
   <text class="t lbl" x="207" y="533">석주선기념박물관</text>
@@ -224,21 +390,22 @@
 <!-- ══ ③ 난파기념음악관 ══════════════════════════════════════════════════ -->
 <g id="lm-nanpa">
   <g transform="translate(441 442)">
-    <ellipse class="shadow" cx="0" cy="32" rx="62" ry="11"/>
-    <path class="wall" d="M-46 32 L-46 -14 L46 -14 L46 32 Z"/>
-    <path class="roof" d="M-54 -14 L0 -44 L54 -14 Z"/>
-    <path class="ink2 med" d="M-54 -14 L54 -14"/>
-    <path class="wall2" style="fill:#f7efd9" d="M-13 32 L-13 4 L13 4 L13 32 Z"/>
-    <path class="ink2 thin" d="M0 8 L0 32"/>
-    <g transform="translate(0 -2)">
-      <rect x="-34" y="0" width="68" height="14" rx="2" fill="#f7efd9" stroke="#6f5f47" stroke-width="1.8"/>
-      <g class="ink2 thin"><path d="M-24 0 l0 14 M-14 0 l0 14 M-4 0 l0 14 M6 0 l0 14 M16 0 l0 14 M26 0 l0 14"/></g>
-      <g fill="#6f5f47"><rect x="-27" y="0" width="5" height="8"/><rect x="-9" y="0" width="5" height="8"/><rect x="11" y="0" width="5" height="8"/></g>
+    <ellipse class="shadow" cx="0" cy="37" rx="70" ry="13"/>
+    <path class="side" d="M-54 -8 L-39 -20 V31 L-54 37 Z"/>
+    <path class="wall" d="M-39 -20 H50 V31 H-39 Z" fill="url(#brickHatch)"/>
+    <path d="M-58 -8 L-8 -53 L61 -24 L50 -12 L-39 -20 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.4"/>
+    <path class="stone" d="M-28 -20 L6 -46 L41 -20 Z"/>
+    <circle cx="6" cy="-27" r="4.5" fill="#9b6e3f" stroke="#4d3a27" stroke-width="1.4"/>
+    <g fill="#d8bd87" stroke="#4d3a27" stroke-width="1.3">
+      <path d="M-25 -17 H-19 V28 H-25 Z"/><path d="M-10 -17 H-4 V28 H-10 Z"/><path d="M6 -17 H12 V28 H6 Z"/><path d="M21 -17 H27 V28 H21 Z"/><path d="M36 -17 H42 V28 H36 Z"/>
     </g>
+    <path class="stone" d="M-31 28 H47 L42 35 H-36 Z"/>
+    <path class="stone" d="M-1 28 V8 A9 9 0 0 1 17 8 V28 Z"/>
+    <g class="etch" opacity=".7"><path d="M-22 -12 H39 M-22 2 H39 M-22 15 H39"/><path d="M-50 3 L-40 0 M-50 14 L-40 11 M-50 25 L-40 22"/></g>
     <g transform="translate(60 -34)">
-      <circle cx="-6" cy="8" r="5" fill="#6f5f47"/>
+      <circle cx="-6" cy="8" r="5" fill="#4d3a27"/>
       <path class="ink med" d="M-1 8 L-1 -12 L12 -16"/>
-      <circle cx="14" cy="0" r="4.4" fill="#6f5f47"/>
+      <circle cx="14" cy="0" r="4.4" fill="#4d3a27"/>
       <path class="ink thin" d="M18 0 L18 -16"/>
     </g>
   </g>
@@ -249,17 +416,17 @@
 <!-- ══ ④ 단국역사관 ══════════════════════════════════════════════════════ -->
 <g id="lm-history">
   <g transform="translate(693 468)">
-    <ellipse class="shadow" cx="0" cy="30" rx="58" ry="11"/>
-    <path class="wall" d="M-44 30 L-44 -12 L44 -12 L44 30 Z"/>
-    <path class="roof3" d="M-52 -12 L0 -40 L52 -12 Z"/>
-    <path class="ink2 med" d="M-52 -12 L52 -12"/>
-    <g class="ink2 thin"><path d="M-30 0 l0 14 M-10 0 l0 14 M10 0 l0 14 M30 0 l0 14"/></g>
-    <path class="wall2" style="fill:#f7efd9" d="M-11 30 L-11 8 L11 8 L11 30 Z"/>
-    <g transform="translate(0 -24)">
-      <path class="wall2" style="fill:#f7efd9;stroke-width:1.8" d="M-18 -5 L18 -5 L18 6 L-18 6 Z"/>
-      <circle cx="-18" cy="0.5" r="5" fill="#e0d1a9" stroke="#6f5f47" stroke-width="1.8"/>
-      <circle cx="18" cy="0.5" r="5" fill="#e0d1a9" stroke="#6f5f47" stroke-width="1.8"/>
-    </g>
+    <ellipse class="shadow" cx="0" cy="35" rx="70" ry="13"/>
+    <path class="side" d="M-58 -4 L-44 -15 V31 L-58 36 Z"/>
+    <path d="M-44 -15 H51 V31 H-44 Z" fill="url(#brickHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path d="M-62 -4 L-28 -39 L58 -19 L51 -8 L-44 -15 Z" fill="#746245" stroke="#4d3a27" stroke-width="2.3"/>
+    <path class="stone" d="M-19 -15 L4 -42 L29 -15 Z"/>
+    <circle cx="5" cy="-24" r="5.5" fill="#ead5a4" stroke="#4d3a27" stroke-width="1.4"/>
+    <path class="ink thin" d="M5 -24 L5 -28 M5 -24 L8 -22"/>
+    <path class="stone" d="M-12 31 V6 A12 12 0 0 1 12 6 V31 Z"/>
+    <g><use href="#arch-window" x="-37" y="-6" width="10" height="17"/><use href="#arch-window" x="-23" y="-6" width="10" height="17"/>
+    <use href="#arch-window" x="18" y="-6" width="10" height="17"/><use href="#arch-window" x="33" y="-6" width="10" height="17"/></g>
+    <path class="etch" d="M-54 7 L-45 4 M-54 18 L-45 15 M-54 29 L-45 26 M-34 -30 L43 -14 M-41 20 H49"/>
   </g>
   <text class="t lbl" x="693" y="539">단국역사관</text>
 </g>
@@ -267,22 +434,26 @@
 <!-- ══ ⑤ 평화의 광장 · 곰상 ══════════════════════════════════════════════ -->
 <g id="lm-plaza">
   <g transform="translate(396 585)">
-    <ellipse cx="0" cy="14" rx="86" ry="33" fill="#e3d3a8" stroke="#6f5f47" stroke-width="2.4"/>
-    <ellipse cx="0" cy="14" rx="64" ry="23" fill="none" stroke="#c9b587" stroke-width="1.8"/>
-    <g class="ink2 thin" opacity=".8">
-      <path d="M-86 14 L-64 14 M64 14 L86 14 M0 -19 L0 -9 M0 37 L0 47"/>
+    <ellipse class="shadow" cx="0" cy="32" rx="94" ry="14"/>
+    <ellipse cx="0" cy="13" rx="90" ry="38" fill="#cdb27b" stroke="#4d3a27" stroke-width="2.2"/>
+    <ellipse cx="0" cy="13" rx="72" ry="29" fill="#dfc791" stroke="#6d5638" stroke-width="1.5"/>
+    <ellipse cx="0" cy="13" rx="51" ry="20" fill="none" stroke="#8a6b43" stroke-width="1.2"/>
+    <g class="etch" opacity=".72">
+      <path d="M-90 13 H-72 M72 13 H90 M0 -25 V-14 M0 40 V51"/>
+      <path d="M-63 -4 L-48 1 M48 1 L63 -4 M-63 30 L-48 25 M48 25 L63 30"/>
+      <path d="M-70 13 C-52 -2 -28 -12 0 -15 M70 13 C52 -2 28 -12 0 -15 M-70 13 C-52 28 -28 38 0 41 M70 13 C52 28 28 38 0 41"/>
     </g>
     <g transform="translate(0 -6)">
-      <path class="wall2" style="fill:#ddd0ab" d="M-22 20 L-22 10 L22 10 L22 20 Z"/>
-      <path class="ink2 thin" d="M-22 15 L22 15"/>
+      <path class="stone" d="M-25 23 L-25 10 L25 10 L25 23 Z"/>
+      <path class="mortar" d="M-25 16 H25 M-12 10 V23 M12 10 V23"/>
       <g transform="translate(0 -2)">
-        <path d="M-16 10 C-20 -6 -12 -18 0 -18 C12 -18 20 -6 16 10 Z" fill="#b98f5e" stroke="#6f5f47" stroke-width="2.2" stroke-linejoin="round"/>
-        <circle cx="0" cy="-26" r="11" fill="#b98f5e" stroke="#6f5f47" stroke-width="2.2"/>
-        <circle cx="-9" cy="-34" r="4.4" fill="#b98f5e" stroke="#6f5f47" stroke-width="1.8"/>
-        <circle cx="9" cy="-34" r="4.4" fill="#b98f5e" stroke="#6f5f47" stroke-width="1.8"/>
-        <circle cx="-4" cy="-27" r="1.6" fill="#5d4d38"/>
-        <circle cx="4" cy="-27" r="1.6" fill="#5d4d38"/>
-        <ellipse cx="0" cy="-21" rx="3.4" ry="2.4" fill="#5d4d38"/>
+        <path d="M-17 10 C-22 -7 -12 -20 0 -20 C13 -20 22 -7 17 10 Z" fill="#8c643d" stroke="#4d3a27" stroke-width="2.2"/>
+        <circle cx="0" cy="-29" r="12" fill="#8c643d" stroke="#4d3a27" stroke-width="2.2"/>
+        <circle cx="-10" cy="-38" r="4.8" fill="#8c643d" stroke="#4d3a27" stroke-width="1.6"/>
+        <circle cx="10" cy="-38" r="4.8" fill="#8c643d" stroke="#4d3a27" stroke-width="1.6"/>
+        <circle cx="-4" cy="-30" r="1.7" fill="#34271c"/><circle cx="4" cy="-30" r="1.7" fill="#34271c"/>
+        <ellipse cx="0" cy="-23" rx="3.7" ry="2.6" fill="#34271c"/>
+        <path class="etch" d="M-12 -10 C-7 -4 -4 4 -4 9 M12 -10 C7 -4 4 4 4 9 M-7 -19 C-2 -15 2 -15 7 -19"/>
       </g>
     </g>
   </g>
@@ -293,18 +464,17 @@
 <!-- ══ ⑥ 퇴계기념중앙도서관 ══════════════════════════════════════════════ -->
 <g id="lm-library">
   <g transform="translate(234 702)">
-    <ellipse class="shadow" cx="0" cy="34" rx="68" ry="12"/>
-    <path class="wall" d="M-54 34 L-54 -20 L54 -20 L54 34 Z"/>
-    <path class="roof" d="M-62 -20 L0 -50 L62 -20 Z"/>
-    <path class="ink2 med" d="M-62 -20 L62 -20"/>
-    <g class="ink2 thin"><path d="M-40 -8 l0 20 M-20 -8 l0 20 M20 -8 l0 20 M40 -8 l0 20"/></g>
-    <path class="wall2" style="fill:#f7efd9" d="M-13 34 L-13 0 L13 0 L13 34 Z"/>
-    <path class="ink2 thin" d="M0 4 L0 34"/>
-    <g transform="translate(0 -38)">
-      <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M-20 0 L-2 -5 L-2 8 L-20 13 Z"/>
-      <path class="wall2" style="fill:#e0d1a9;stroke-width:1.8" d="M20 0 L2 -5 L2 8 L20 13 Z"/>
-      <path class="ink thin" d="M0 -5 L0 8"/>
-    </g>
+    <ellipse class="shadow" cx="0" cy="39" rx="82" ry="14"/>
+    <path class="side" d="M-65 -6 L-49 -20 V34 L-65 40 Z"/>
+    <path d="M-49 -20 H58 V34 H-49 Z" fill="url(#brickHatch)" stroke="#4d3a27" stroke-width="2.3"/>
+    <path d="M-70 -6 L-22 -55 L70 -25 L58 -12 L-49 -20 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.5"/>
+    <path class="stone" d="M-22 -20 L5 -52 L34 -20 Z"/>
+    <path class="stone" d="M-18 34 V2 A18 18 0 0 1 18 2 V34 Z"/>
+    <path class="window" d="M-10 34 V8 A10 10 0 0 1 10 8 V34 Z"/>
+    <g><use href="#arch-window" x="-42" y="-8" width="11" height="20"/><use href="#arch-window" x="-27" y="-8" width="11" height="20"/>
+    <use href="#arch-window" x="26" y="-8" width="11" height="20"/><use href="#arch-window" x="42" y="-8" width="11" height="20"/></g>
+    <path class="stone" d="M-55 34 H63 L57 41 H-62 Z"/>
+    <path class="etch" d="M-59 7 L-50 4 M-59 18 L-50 15 M-59 29 L-50 26 M-42 -11 H52 M-42 15 H52 M-14 -42 L53 -21"/>
   </g>
   <text class="t lbl" x="234" y="781">퇴계기념중앙도서관</text>
   <text class="t tiny" x="234" y="803">여기부터 경사가 급해집니다</text>
@@ -313,14 +483,19 @@
 <!-- ══ ⑦ 들샘길 — 공대와 도서관 사이의 인공 개천 ═════════════════════════ -->
 <g id="lm-deulsaem">
   <g transform="translate(576 715)">
-    <path class="water" style="stroke-width:11;opacity:.85" d="M6 -72 C-6 -46 12 -18 -2 10 C-12 32 4 52 0 72"/>
-    <path class="water" style="stroke-width:4;opacity:.6;stroke:#b7d3dc" d="M4 -64 C-6 -42 10 -16 -3 8 C-12 28 2 48 -1 64"/>
-    <g class="ink2 thin" opacity=".85">
-      <path d="M-24 -48 L24 -44 M-26 -18 L22 -14 M-24 12 L24 16 M-26 42 L22 46"/>
+    <path d="M7 -78 C-10 -52 14 -28 -5 0 C-22 26 5 48 -3 78" fill="none" stroke="#405d60" stroke-width="17" opacity=".55" stroke-linecap="round"/>
+    <path d="M6 -76 C-8 -51 12 -28 -5 0 C-19 24 4 48 -3 76" fill="none" stroke="#6f9ca0" stroke-width="11" opacity=".9" stroke-linecap="round"/>
+    <path d="M3 -70 C-5 -50 8 -30 -7 -4 C-17 17 0 42 -5 66" fill="none" stroke="#c7d8cf" stroke-width="2.4" opacity=".85"/>
+    <g class="etch" opacity=".8">
+      <path d="M-17 -57 C-4 -51 8 -53 18 -61 M-18 -31 C-6 -25 7 -27 18 -35 M-21 -4 C-9 2 4 0 15 -8 M-19 24 C-7 30 7 28 17 20 M-15 51 C-4 58 8 55 15 48"/>
     </g>
-    <path class="roof2" style="stroke-width:2" d="M-22 -4 L22 -2 L22 6 L-22 4 Z"/>
-    <path class="ink thin" d="M-18 -3 L-18 -12 M18 -1 L18 -10"/>
-    <use href="#bush" x="14" y="-86" width="46" height="26"/>
+    <g fill="#ad8a58" stroke="#4d3a27" stroke-width="1.7">
+      <path d="M-29 -43 L24 -39 L24 -33 L-29 -37 Z"/><path d="M-31 -14 L22 -10 L22 -4 L-31 -8 Z"/>
+      <path d="M-29 15 L24 19 L24 25 L-29 21 Z"/><path d="M-28 44 L22 48 L22 54 L-28 50 Z"/>
+    </g>
+    <path d="M-27 -3 L26 0 L26 10 L-27 7 Z" fill="#7e4a2a" stroke="#4d3a27" stroke-width="2"/>
+    <path class="ink thin" d="M-22 -2 V-13 M21 0 V-11"/>
+    <use href="#tree-cluster" x="10" y="-95" width="56" height="44"/>
   </g>
   <text class="t lbl" x="576" y="812">들샘길</text>
   <text class="t tiny" x="576" y="834">용이 내려가는 물길</text>
@@ -329,16 +504,15 @@
 <!-- ══ ⑧ 정문 · 상징탑 ═══════════════════════════════════════════════════ -->
 <g id="lm-gate">
   <g transform="translate(432 832)">
-    <ellipse class="shadow" cx="0" cy="30" rx="66" ry="12"/>
-    <path class="wall" d="M-52 30 L-52 -6 L-38 -6 L-38 30 Z"/>
-    <path class="wall" d="M38 30 L38 -6 L52 -6 L52 30 Z"/>
-    <path class="roof" d="M-60 -6 L-45 -20 L-30 -6 Z"/>
-    <path class="roof" d="M30 -6 L45 -20 L60 -6 Z"/>
-    <path class="ink med" d="M-38 -2 C-16 -18 16 -18 38 -2"/>
-    <path class="wall2" d="M-9 -14 L-5 -52 L5 -52 L9 -14 Z"/>
-    <path class="roof2" d="M-11 -52 L0 -68 L11 -52 Z"/>
-    <circle cx="0" cy="-73" r="5" fill="#c9a24a" stroke="#6f5f47" stroke-width="1.8"/>
-    <path class="ink2 thin" d="M-7 -30 L7 -30 M-8 -40 L8 -40"/>
+    <ellipse class="shadow" cx="0" cy="35" rx="76" ry="14"/>
+    <path class="stone" d="M-60 34 V-10 H-34 V34 Z M34 34 V-10 H60 V34 Z" fill="url(#brickHatch)"/>
+    <path d="M-67 -10 L-47 -31 L-27 -10 Z M27 -10 L47 -31 L67 -10 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path class="stone" d="M-36 34 V5 C-28 -19 28 -19 36 5 V34 H22 V8 C16 -3 -16 -3 -22 8 V34 Z"/>
+    <path class="mortar" d="M-60 2 H-34 M-60 14 H-34 M-60 26 H-34 M34 2 H60 M34 14 H60 M34 26 H60 M-32 10 H32"/>
+    <path class="stone" d="M-13 3 L-8 -52 H8 L13 3 Z" fill="url(#brickHatch)"/>
+    <path d="M-16 -52 L0 -74 L16 -52 Z" fill="#8e4b28" stroke="#4d3a27" stroke-width="2.2"/>
+    <circle cx="0" cy="-80" r="5" fill="#b48743" stroke="#4d3a27" stroke-width="1.6"/>
+    <path class="etch" d="M-9 -12 H9 M-10 -25 H10 M-9 -38 H9 M-52 -20 L-39 -12 M39 -12 L52 -20"/>
   </g>
   <text class="t lbl" x="432" y="900">정문 · 상징탑</text>
 </g>
@@ -352,21 +526,24 @@
 </g>
 
 <!-- ══ 캠퍼스 바깥 — 죽전역 방면 ════════════════════════════════════════ -->
-<path d="M58 950 L842 950 L842 1216 L58 1216 Z" fill="#efe6ce" stroke="none"/>
+<path d="M58 950 L842 950 L842 1216 L58 1216 Z" fill="#efe5ca" stroke="none"/>
+<g class="contour" stroke-width="1.1" opacity=".22">
+  <path d="M196 978 C268 964 340 968 398 982"/>
+  <path d="M538 1142 C624 1124 718 1130 806 1152"/>
+</g>
 
 <!-- 탄천 -->
 <g>
-  <path class="water" style="stroke-width:26;opacity:.55" d="M58 968 C104 1026 84 1080 128 1130 C156 1164 172 1192 180 1216"/>
-  <path class="water" style="stroke-width:10;opacity:.5;stroke:#b7d3dc" d="M62 976 C106 1032 88 1082 132 1132 C158 1164 174 1192 182 1214"/>
-  <g class="water thin" style="opacity:.7">
-    <path d="M76 1012 C88 1018 98 1016 108 1010"/>
-    <path d="M94 1066 C106 1072 116 1070 126 1064"/>
-    <path d="M124 1120 C136 1126 146 1124 156 1118"/>
+  <path d="M58 968 C104 1026 84 1080 128 1130 C156 1164 172 1192 180 1216" fill="none" stroke="#405d60" stroke-width="31" opacity=".34" stroke-linecap="round"/>
+  <path class="water" style="stroke-width:22;opacity:.76" d="M58 968 C104 1026 84 1080 128 1130 C156 1164 172 1192 180 1216"/>
+  <path d="M50 976 C94 1028 78 1088 124 1138 C150 1166 164 1192 172 1214" fill="none" stroke="#c8dad1" stroke-width="3" opacity=".85"/>
+  <g class="etch" opacity=".82">
+    <path d="M65 992 C79 1002 90 1000 102 991 M76 1020 C90 1030 102 1028 113 1019"/>
+    <path d="M84 1054 C98 1064 110 1062 121 1053 M98 1084 C112 1094 124 1092 136 1083"/>
+    <path d="M116 1117 C130 1127 142 1125 153 1116 M136 1151 C150 1161 162 1159 172 1150"/>
+    <path d="M150 1182 C162 1190 172 1188 180 1180"/>
   </g>
-  <g class="ink2 thin" opacity=".8">
-    <path d="M150 1052 C146 1040 148 1030 154 1022"/>
-    <path d="M160 1056 C158 1044 162 1032 168 1026"/>
-  </g>
+  <g class="ink2 thin" opacity=".8"><path d="M150 1052 C146 1040 148 1030 154 1022"/><path d="M160 1056 C158 1044 162 1032 168 1026"/></g>
 </g>
 <g id="lm-tancheon">
   <text class="t lbl" x="90" y="1040" transform="rotate(-62 90 1040)">탄천</text>
@@ -390,19 +567,23 @@
 <!-- ══ ⑨ 죽전역 — 캠퍼스 밖 두 곳의 갈림 지점 ════════════════════════════ -->
 <g id="lm-station">
   <g transform="translate(450 1008)">
-    <ellipse class="shadow" cx="0" cy="26" rx="66" ry="11"/>
-    <path class="wall" d="M-54 26 L-54 -10 L54 -10 L54 26 Z"/>
-    <path class="roof2" d="M-62 -10 L-40 -30 L40 -30 L62 -10 Z"/>
-    <path class="ink2 med" d="M-62 -10 L62 -10"/>
-    <g transform="translate(0 6)">
-      <rect x="-34" y="-8" width="68" height="22" rx="7" fill="#f7efd9" stroke="#6f5f47" stroke-width="2.2"/>
-      <rect x="-26" y="-3" width="16" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
-      <rect x="-5" y="-3" width="10" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
-      <rect x="10" y="-3" width="16" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
-      <circle cx="-20" cy="16" r="4" fill="#6f5f47"/>
-      <circle cx="20" cy="16" r="4" fill="#6f5f47"/>
+    <ellipse class="shadow" cx="0" cy="32" rx="76" ry="13"/>
+    <path class="side" d="M-61 -6 L-47 -18 V26 L-61 32 Z"/>
+    <path d="M-47 -18 H56 V26 H-47 Z" fill="url(#brickHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path d="M-66 -6 L-31 -38 L65 -22 L56 -10 L-47 -18 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.4"/>
+    <path class="stone" d="M-16 -18 L3 -38 L23 -18 Z"/>
+    <circle cx="3" cy="-24" r="5" fill="#ead6a2" stroke="#4d3a27" stroke-width="1.3"/>
+    <path class="ink thin" d="M3 -24 V-28 M3 -24 L6 -22"/>
+    <path class="stone" d="M-13 26 V4 A13 13 0 0 1 13 4 V26 Z"/>
+    <g><use href="#arch-window" x="-39" y="-7" width="10" height="17"/><use href="#arch-window" x="30" y="-7" width="10" height="17"/></g>
+    <g transform="translate(0 12)">
+      <rect x="-39" y="-9" width="78" height="22" rx="5" fill="#d6be8b" stroke="#4d3a27" stroke-width="1.8"/>
+      <rect x="-31" y="-4" width="15" height="10" rx="1.5" fill="#779097" stroke="#4d3a27" stroke-width="1.1"/>
+      <rect x="-10" y="-4" width="20" height="10" rx="1.5" fill="#779097" stroke="#4d3a27" stroke-width="1.1"/>
+      <rect x="16" y="-4" width="15" height="10" rx="1.5" fill="#779097" stroke="#4d3a27" stroke-width="1.1"/>
+      <circle cx="-23" cy="14" r="4" fill="#3b2e21"/><circle cx="23" cy="14" r="4" fill="#3b2e21"/>
     </g>
-    <path class="ink2 thin" d="M-46 -20 L-46 -14 M46 -20 L46 -14"/>
+    <path class="etch" d="M-56 7 L-48 4 M-56 17 L-48 14 M-38 -12 H50 M-38 20 H50"/>
   </g>
   <text class="t lbl" x="450" y="1074">죽전역</text>
   <text class="t tiny" x="450" y="1096">캠퍼스 밖 두 곳은 여기서 갑니다</text>
@@ -411,17 +592,19 @@
 <!-- ══ ⑩ 용인포은아트홀 ══════════════════════════════════════════════════ -->
 <g id="lm-artshall">
   <g transform="translate(684 1098)">
-    <ellipse class="shadow" cx="0" cy="32" rx="60" ry="11"/>
-    <path class="wall" d="M-46 32 L-46 -12 L46 -12 L46 32 Z"/>
-    <path class="roof2" d="M-52 -12 C-40 -48 40 -48 52 -12 Z"/>
-    <path class="wall2" style="fill:#f7efd9" d="M-26 32 L-26 4 C-26 -13 26 -13 26 4 L26 32 Z"/>
-    <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M-26 32 L-26 4 C-24 -9 -12 -11 -10 2 L-12 32 Z"/>
-    <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M26 32 L26 4 C24 -9 12 -11 10 2 L12 32 Z"/>
-    <g class="ink2 thin"><path d="M-40 12 l0 12 M40 12 l0 12"/></g>
+    <ellipse class="shadow" cx="0" cy="36" rx="72" ry="13"/>
+    <path class="side" d="M-56 2 L-45 -12 V31 L-56 36 Z"/>
+    <path d="M-45 -12 H50 V31 H-45 Z" fill="url(#brickHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path d="M-57 -12 C-49 -48 -28 -62 2 -64 C32 -62 53 -48 61 -12 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.5"/>
+    <path class="etch" d="M-45 -14 C-30 -39 -15 -48 2 -50 C19 -48 35 -39 50 -14 M-28 -32 C-8 -24 12 -24 32 -32 M2 -63 V-50"/>
+    <circle cx="2" cy="-64" r="3.5" fill="#a77b40" stroke="#4d3a27" stroke-width="1.2"/>
+    <path class="stone" d="M-25 31 V2 A25 20 0 0 1 25 2 V31 Z"/>
+    <path class="window" d="M-12 31 V7 A12 12 0 0 1 12 7 V31 Z"/>
+    <g><use href="#arch-window" x="-40" y="2" width="10" height="18"/><use href="#arch-window" x="31" y="2" width="10" height="18"/></g>
     <g transform="translate(0 -30)">
-      <circle cx="-7" cy="6" r="5" fill="#6f5f47"/>
+      <circle cx="-7" cy="6" r="5" fill="#4d3a27"/>
       <path class="ink med" d="M-2 6 L-2 -10 L10 -14"/>
-      <circle cx="12" cy="-1" r="4.2" fill="#6f5f47"/>
+      <circle cx="12" cy="-1" r="4.2" fill="#4d3a27"/>
     </g>
   </g>
   <text class="t lbl" x="684" y="1168">용인포은아트홀</text>
@@ -431,20 +614,23 @@
 <!-- ══ ⑪ 보정동 카페거리 ═════════════════════════════════════════════════ -->
 <g id="lm-bojeong">
   <g transform="translate(234 1128)">
-    <ellipse class="shadow" cx="0" cy="30" rx="66" ry="11"/>
-    <path class="wall" d="M-52 30 L-52 -6 L-6 -6 L-6 30 Z"/>
-    <path class="wall2" d="M-2 30 L-2 -14 L46 -14 L46 30 Z"/>
-    <path class="roof3" d="M-56 -6 L-29 -22 L-2 -6 Z"/>
-    <path class="roof3" d="M-6 -14 L22 -30 L50 -14 Z"/>
-    <path d="M-54 6 L-4 6 L-8 18 L-50 18 Z" fill="#c05f3c" stroke="#6f5f47" stroke-width="2"/>
-    <g stroke="#f7efd9" stroke-width="3" opacity=".85"><path d="M-44 6 L-46 18 M-32 6 L-34 18 M-20 6 L-22 18"/></g>
-    <path class="wall2" style="fill:#f7efd9" d="M6 30 L6 6 L26 6 L26 30 Z"/>
+    <ellipse class="shadow" cx="0" cy="35" rx="76" ry="13"/>
+    <path class="side" d="M-60 -2 L-49 -10 V30 L-60 35 Z"/>
+    <path class="wall" d="M-49 -10 H-4 V30 H-49 Z" fill="url(#brickHatch)"/>
+    <path class="wall2" d="M0 -18 H50 V30 H0 Z" fill="url(#brickHatch)"/>
+    <path d="M-58 -10 L-29 -31 L3 -10 Z M-8 -18 L23 -42 L57 -18 Z" fill="url(#roofHatch)" stroke="#4d3a27" stroke-width="2.2"/>
+    <path d="M-51 4 H-2 L-7 18 H-47 Z" fill="#9e4e2c" stroke="#4d3a27" stroke-width="1.8"/>
+    <g stroke="#ead6ac" stroke-width="3"><path d="M-43 4 L-44 18 M-32 4 L-34 18 M-21 4 L-23 18 M-10 4 L-12 18"/></g>
+    <path class="window" d="M8 30 V5 H30 V30 Z"/>
+    <use href="#arch-window" x="35" y="-4" width="10" height="18"/>
+    <path class="etch" d="M-56 13 L-49 10 M-56 24 L-49 21 M5 -11 H45 M5 19 H45 M-26 -25 L-6 -11 M18 -34 L49 -18"/>
     <g transform="translate(22 -44)">
-      <path class="wall2" style="fill:#f7efd9;stroke-width:2" d="M-13 -6 L13 -6 L10 12 L-10 12 Z"/>
+      <path class="stone" d="M-13 -6 L13 -6 L10 12 L-10 12 Z"/>
       <path class="ink med" d="M13 -2 C22 -2 22 8 13 8"/>
-      <path class="wall2" style="fill:#e0d1a9;stroke-width:1.8" d="M-16 12 L16 12 L16 16 L-16 16 Z"/>
+      <path class="stone" d="M-16 12 L16 12 L16 16 L-16 16 Z"/>
       <g class="ink2 thin"><path d="M-6 -14 C-9 -20 -3 -22 -6 -28 M6 -14 C3 -20 9 -22 6 -28"/></g>
     </g>
+    <g transform="translate(-68 18)" fill="#8a6a43" stroke="#4d3a27" stroke-width="1.2"><circle cx="0" cy="0" r="6"/><path d="M-8 13 H8 M-6 8 L-2 1 M6 8 L2 1" fill="none"/></g>
   </g>
   <text class="t lbl" x="234" y="1194">보정동 카페거리</text>
 </g>
