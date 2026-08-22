@@ -42,7 +42,20 @@
   <p id="notice" class="error" role="alert" hidden></p>
   <p id="offline-note" class="note offline-note" hidden>지금 오프라인입니다. 사진은 기기에 보관되고, 연결되면 자동으로 전송됩니다.</p>
 
-  <ul id="loc-list" class="loc-list"></ul>
+  <!-- 지도가 기본 뷰, 기존 목록은 전환 버튼으로 유지한다(확정 7).
+       목록은 숨겨져 있어도 DOM에는 항상 있다 — 시트의 「사진 올리기」가 목록 안의
+       기존 input을 그대로 눌러 쓰기 때문이다(§3-D · §5 금지 28). -->
+  <div class="view-switch">
+    <button id="view-toggle" type="button" class="secondary" aria-pressed="false">목록으로 보기</button>
+  </div>
+
+  <section id="map-panel" class="card map-panel">
+    <div id="map-view"></div>
+    <p id="map-legend" class="map-legend"></p>
+    <ul id="unplaced-list" class="unplaced-list" hidden></ul>
+  </section>
+
+  <ul id="loc-list" class="loc-list" hidden></ul>
 
   <section class="card">
     <a id="fourcut-link" class="link-button" href="fourcut.html">인생네컷 만들기</a>
@@ -69,6 +82,36 @@
   </section>
 </main>
 
+<!-- 핀을 눌렀을 때 열리는 시트. **참조 전용 투영**이다 — 목록 카드를 여기로 옮기지 않고
+     locIndex만 기억한다. 파일 선택은 목록 안의 기존 input에 위임한다(§3-D · §5 금지 28). -->
+<div id="spot-sheet" class="spot-sheet" role="dialog" aria-labelledby="sheet-title" hidden>
+  <div class="spot-sheet-inner">
+    <div class="sheet-head">
+      <h2 id="sheet-title"></h2>
+      <button id="sheet-close" type="button" class="secondary sheet-close">닫기</button>
+    </div>
+    <p id="sheet-badge-row"><span id="sheet-badge" class="badge"></span></p>
+    <p id="sheet-mission" class="loc-mission"></p>
+    <p id="sheet-fixed" class="fixed-note" hidden>모둠원 전원이 보이는 단체사진</p>
+    <img id="sheet-thumb" class="sheet-thumb" alt="인증사진 미리보기" hidden>
+    <p id="sheet-hint" class="note"></p>
+    <div class="button-row">
+      <button id="sheet-pick" type="button" hidden>사진 올리기</button>
+      <button id="sheet-retry" type="button" class="secondary" hidden>다시 전송</button>
+    </div>
+  </div>
+</div>
+
+<!-- 4곳 진행 시 1회 뜨는 축하 연출(추정 4 — 기기당 1회). 판정은 기존 progressCount 재사용. -->
+<div id="unlock-toast" class="unlock-toast" role="status" hidden>
+  <h2>네컷이 열렸습니다!</h2>
+  <p id="unlock-text"></p>
+  <div class="button-row">
+    <a id="unlock-go" class="link-button" href="fourcut.html">인생네컷 만들러 가기</a>
+    <button id="unlock-close" type="button" class="secondary">계속 미션하기</button>
+  </div>
+</div>
+
 <script type="module">
 import { db, statusOf, computeCurrentLocIndex, progressCount, unsentKeys } from './js/db.js';
 import { renderInitError, renderPersistenceBanner } from './js/firebase-config.js';
@@ -77,8 +120,10 @@ import { FRAMES } from './frames/frames.js';
 import {
   requireLogin, clearSession, statusText, CURRENT_TEXT, STATUS_TEXT,
   setText, el, clear, formatTime, markBusy, markIdle,
-  registerServiceWorker, clearAppShellAndStorage, doneKey
+  registerServiceWorker, clearAppShellAndStorage, doneKey, groupColor
 } from './js/common.js';
+import { createMapView } from './js/map-view.js';
+import { isFractionPoint } from './map/map-config.js';
 
 const session = requireLogin();
 const app = document.getElementById('app');
@@ -97,6 +142,34 @@ registerServiceWorker();
 let state = null;
 const busyLoc = {};                 // 업로드 중인 장소
 const opIds = {};                   // 장소별 operationId — 재시도·새로고침에도 재사용
+
+// ── 지도 상태 (§3-B 읽기 캐시 계약 · §5 금지 35) ──────────────────────────
+// mapSpots는 **이 화면 초기화 1곳에서만** 읽고 페이지 수명 동안 이 변수에 머문다.
+// render()는 업로드·구독 갱신마다 다시 도는데, 거기서 다시 읽으면 용량 산식이 깨진다.
+let mapSpots = { byId: {} };
+// 썸네일도 지도 때문에 다시 읽지 않는다 — 기존 paintThumbs()가 이미 가진 데이터를 주입한다.
+const thumbSrc = {};
+let mapView = null;
+let sheetLoc = null;                // 시트가 가리키는 locIndex. **참조 전용**이다(§3-D).
+let unlockShown = false;
+
+const mapPanel = document.getElementById('map-panel');
+const viewToggle = document.getElementById('view-toggle');
+const unplacedList = document.getElementById('unplaced-list');
+const mapLegend = document.getElementById('map-legend');
+const sheet = document.getElementById('spot-sheet');
+const sheetTitle = document.getElementById('sheet-title');
+const sheetBadge = document.getElementById('sheet-badge');
+const sheetMission = document.getElementById('sheet-mission');
+const sheetFixed = document.getElementById('sheet-fixed');
+const sheetThumb = document.getElementById('sheet-thumb');
+const sheetHint = document.getElementById('sheet-hint');
+const sheetPick = document.getElementById('sheet-pick');
+const sheetRetry = document.getElementById('sheet-retry');
+const unlockToast = document.getElementById('unlock-toast');
+
+const UNLOCK_KEY = 'dku:unlock:' + session.classId + '/' + session.gid;
+const MY_COLOR = groupColor(session.groupNo || session.gid);
 
 function showNotice(text) {
   setText(notice, text);
@@ -125,6 +198,202 @@ function badgeFor(st) {
   }
   return el('span', 'badge badge-' + st, statusText(st));
 }
+
+// ── 지도 뷰 ───────────────────────────────────────────────────────────────
+// 렌더러는 순수 함수다 — 여기서 모델을 만들어 넘길 뿐, 렌더러 안에서 DB를 읽지 않는다.
+function mapModel() {
+  const course = (state && state.course) || [];
+  const placed = [];
+  const unplaced = [];
+  course.forEach(function (loc) {
+    const st = statusOf(state, loc.locIndex);
+    const xy = loc.spotId ? mapSpots.byId[loc.spotId] : null;
+    const item = {
+      key: String(loc.locIndex),
+      label: (loc.locIndex + 1) + '. ' + loc.name,
+      status: st,
+      color: MY_COLOR,
+      thumb: thumbSrc[loc.locIndex] || null,
+      selectable: true
+    };
+    if (isFractionPoint(xy)) {
+      item.x = xy.x;
+      item.y = xy.y;
+      placed.push(item);
+    } else {
+      unplaced.push({ loc: loc, status: st });
+    }
+  });
+  return {
+    spots: placed,
+    routes: placed.length > 1 ? [{ color: MY_COLOR, points: placed.map(function (s) { return { x: s.x, y: s.y }; }) }] : [],
+    showPhotos: true,
+    unplaced: unplaced
+  };
+}
+
+// 좌표가 아직 지정되지 않은 장소는 지도 아래 줄로 내려간다. **업로드는 동일하게 가능**하다
+// (추정 6 — 코스 입력 전·좌표 찍기 전에도 기능 저하 0).
+function paintUnplaced(rows) {
+  clear(unplacedList);
+  unplacedList.hidden = rows.length === 0;
+  rows.forEach(function (row) {
+    const li = document.createElement('li');
+    li.setAttribute('data-unplaced', String(row.loc.locIndex));
+    li.appendChild(el('span', 'unplaced-name', (row.loc.locIndex + 1) + '. ' + row.loc.name));
+    const badge = badgeFor(row.status);
+    li.appendChild(badge);
+    const open = el('button', 'secondary', '열기');
+    open.type = 'button';
+    open.id = 'unplaced-open-' + row.loc.locIndex;
+    open.addEventListener('click', function () { openSheet(row.loc.locIndex); });
+    li.appendChild(open);
+    unplacedList.appendChild(li);
+  });
+}
+
+// 좌표 1문서를 **1회** 읽는다. 화면은 이 프라미스를 기다리지 않는다(A-3).
+// 늦게 도착해도 그때 지도만 다시 그리므로 결과를 버리지 않는다. 실패하면 빈 값 그대로 —
+// 「위치 미지정」 줄과 목록 전환으로 기능 저하 없이 계속 쓴다.
+function loadMapSpots() {
+  Promise.resolve()
+    .then(function () { return db.getMapSpots(); })
+    .then(function (v) {
+      if (!v || !v.byId) return;
+      mapSpots = v;
+      renderMap();
+      paintSheet();
+    })
+    .catch(function () { /* 좌표 없이 계속 간다 — 업로드 흐름은 영향받지 않는다 */ });
+}
+
+function renderMap() {
+  if (!mapView || !state) return;
+  const model = mapModel();
+  mapView.render(model);
+  paintUnplaced(model.unplaced);
+  setText(mapLegend, model.unplaced.length
+    ? '지도 위 핀을 누르면 미션이 열립니다. 아직 위치가 지정되지 않은 장소 ' +
+      model.unplaced.length + '곳은 아래 목록에서 엽니다.'
+    : '지도 위 핀을 누르면 미션이 열립니다.');
+}
+
+// ── 시트 (참조 전용 투영 — §3-D) ──────────────────────────────────────────
+// 카드 DOM을 옮기지 않는다. 상태 데이터에서 다시 그리고, 파일 선택만 목록의 input에 위임한다.
+function paintSheet() {
+  if (sheetLoc == null || !state) {
+    sheet.hidden = true;
+    return;
+  }
+  const loc = (state.course || []).filter(function (c) { return c.locIndex === sheetLoc; })[0];
+  if (!loc) {
+    sheet.hidden = true;
+    sheetLoc = null;
+    return;
+  }
+  const st = statusOf(state, loc.locIndex);
+  sheet.hidden = false;
+  sheet.setAttribute('data-loc', String(loc.locIndex));
+  sheet.setAttribute('data-status', st);
+  setText(sheetTitle, (loc.locIndex + 1) + '. ' + loc.name);
+  sheetBadge.className = 'badge badge-' + st;
+  setText(sheetBadge, st === 'current' ? CURRENT_TEXT : statusText(st));
+
+  if (st === 'locked') {
+    setText(sheetMission, '앞 장소를 마치면 열립니다.');
+    sheetMission.className = 'loc-mission locked-text';
+    sheetFixed.hidden = true;
+    sheetThumb.hidden = true;
+    sheetThumb.removeAttribute('src');
+    setText(sheetHint, '');
+    sheetPick.hidden = true;
+    sheetRetry.hidden = true;
+    return;
+  }
+
+  sheetMission.className = 'loc-mission';
+  setText(sheetMission, loc.mission);
+  sheetFixed.hidden = false;
+
+  const src = thumbSrc[loc.locIndex];
+  if (src) {
+    sheetThumb.src = src;
+    sheetThumb.hidden = false;
+  } else {
+    sheetThumb.hidden = true;
+    sheetThumb.removeAttribute('src');
+  }
+
+  // 안내 문면은 목록 카드와 같은 규칙을 쓴다(확정 23-⑵).
+  const hintEl = document.getElementById('hint-' + loc.locIndex);
+  setText(sheetHint, hintEl ? hintEl.textContent : '');
+
+  sheetPick.hidden = false;
+  sheetPick.textContent = (st === 'synced' || st === 'queued' || st === 'error')
+    ? '사진 다시 올리기' : '사진 올리기';
+  sheetRetry.hidden = st !== 'error';
+}
+
+function openSheet(locIndex) {
+  sheetLoc = locIndex;
+  paintSheet();
+}
+
+function closeSheet() {
+  sheetLoc = null;
+  sheet.hidden = true;
+}
+
+document.getElementById('sheet-close').addEventListener('click', closeSheet);
+
+// 파일 선택은 **목록 안의 기존 input**을 그대로 누른다(§5 금지 28).
+// 목록이 숨겨져 있어도 DOM에는 항상 있고, 프로그램 클릭은 표시 여부와 무관하게 동작한다.
+sheetPick.addEventListener('click', function () {
+  if (sheetLoc == null) return;
+  const input = document.getElementById('file-' + sheetLoc);
+  if (input) input.click();
+});
+
+sheetRetry.addEventListener('click', function () {
+  if (sheetLoc != null) onRetry(sheetLoc);
+});
+
+// ── 뷰 전환 ───────────────────────────────────────────────────────────────
+function setView(mode) {
+  const listMode = mode === 'list';
+  list.hidden = !listMode;
+  mapPanel.hidden = listMode;
+  viewToggle.textContent = listMode ? '지도로 보기' : '목록으로 보기';
+  viewToggle.setAttribute('aria-pressed', listMode ? 'true' : 'false');
+  if (listMode) closeSheet();
+}
+
+viewToggle.addEventListener('click', function () {
+  setView(list.hidden ? 'list' : 'map');
+});
+
+// ── 해금 축하 연출 (기기당 1회 · 추정 4) ──────────────────────────────────
+// 판정은 **기존 것을 그대로 쓴다** — progressCount(state) >= 4 (확정 23-⑴ 합집합).
+// 새 집합·새 판정을 만들지 않는다(§3-A).
+function maybeCelebrate(count) {
+  if (unlockShown || count < 4) return;
+  unlockShown = true;
+  if (localStorage.getItem(UNLOCK_KEY)) return;
+  localStorage.setItem(UNLOCK_KEY, '1');
+  // 진행 수는 done∪pending∪error 합집합이라 **4장 전부 미전송이어도 이 연출이 뜬다**
+  // (§3-A). 그런데 이 연출은 화면 맨 위의 미전송 배지를 덮는다 — 축하만 하고 끝내면
+  // 확정 25-⑴이 막으려던 「서버에 아무것도 없는 채 코스를 끝내는」 상황을 되레 가린다.
+  // 그래서 미전송이 남아 있으면 같은 상자 안에서 그 사실을 함께 말한다(B-2).
+  const unsent = unsentKeys(state).size;
+  setText(document.getElementById('unlock-text'),
+    '장소 ' + count + '곳을 진행했습니다. 이제 인생네컷을 만들 수 있습니다.'
+    + (unsent > 0 ? ' 단, 아직 전송되지 않은 사진 ' + unsent + '장이 있습니다 — 신호가 잡히면 자동 전송됩니다.' : ''));
+  unlockToast.hidden = false;
+}
+
+document.getElementById('unlock-close').addEventListener('click', function () {
+  unlockToast.hidden = true;
+});
 
 function render() {
   if (!state) return;
@@ -221,6 +490,11 @@ function render() {
   }
 
   paintUnsent();
+  // 지도·시트는 같은 렌더 사이클에서 같은 상태로 다시 그린다(§3-D).
+  // 시트가 열린 채 구독 갱신이 와도 깨지지 않는다. 여기서 서버 읽기를 새로 일으키지 않는다.
+  renderMap();
+  paintSheet();
+  maybeCelebrate(doneCount);
   paintThumbs();
 }
 
@@ -234,14 +508,21 @@ function paintUnsent() {
 }
 
 // 저장된 사진 미리보기를 붙인다.
+// 여기서 얻은 데이터를 thumbSrc에 남겨 지도 폴라로이드·시트가 **그대로 재사용**한다 —
+// 지도 때문에 사진을 다시 읽지 않는다(§3-B ⑶).
 async function paintThumbs() {
   const photos = await db.listMyPhotos();
   photos.forEach(function (p) {
+    const src = 'data:' + p.mime + ';base64,' + p.full;
+    thumbSrc[p.locIndex] = src;
     const img = document.getElementById('thumb-' + p.locIndex);
     if (!img) return;
-    img.src = 'data:' + p.mime + ';base64,' + p.full;
+    img.src = src;
     img.hidden = false;
   });
+  // 사진이 새로 들어왔으면 폴라로이드·시트 미리보기만 다시 그린다(상태는 이미 반영돼 있다).
+  renderMap();
+  paintSheet();
 }
 
 async function onPick(locIndex, input) {
@@ -451,6 +732,18 @@ function prefetchFrameAssets() {
     }
     noticeIfRevMismatch(state);
     paintOnline();
+
+    // ── 지도 준비 ──────────────────────────────────────────────────────
+    // 좌표 읽기는 **비차단이다**(재작업 A-3). 예전 판은 여기서 await 했는데, 그러면
+    // 신호가 끊길락말락한 캠퍼스에서 그 getDoc 하나가 늦게 끝나는 동안 미션 화면 전체가
+    // — 목록 전환도 업로드도 — 뜨지 않는다. 기존 흐름에 없던 새 차단 의존이었다.
+    // 그래서 화면을 먼저 띄우고, 좌표가 도착하면 **지도만** 다시 그린다.
+    // 호출 횟수는 여전히 1회다(§3-B 캐시 계약 · §5 금지 35).
+    mapView = createMapView(document.getElementById('map-view'), { variant: 'student' });
+    mapView.onSpotSelect(function (key) { openSheet(Number(key)); });
+    setView('map');
+    loadMapSpots();
+
     render();
     db.onGroup(function (next) {
       state = next;

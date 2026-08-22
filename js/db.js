@@ -6,7 +6,8 @@
 //   listMyPhotos / getPhoto / onGroup / onDashboard / retryFailed /
 //   admin.createGroup / admin.updateCourse / admin.resetData / admin.setFrameTexts /
 //   admin.setFrameAsset / admin.clearFrameAsset / admin.setFrameOptions /
-//   getFrameTexts / getFrameAssetMeta / getFrameAssetImages / wipeLocalData
+//   getFrameTexts / getFrameAssetMeta / getFrameAssetImages / wipeLocalData /
+//   getMapSpots / admin.setMapSpot / admin.clearMapSpot            (v3.4 §2-8 · §3-C)
 //
 // 진행도는 숫자 필드가 아니라 완료 집합 done:{ "L0": 승인시각 } 이다(확정 19, §5 금지 13).
 // 오프라인 전송 주체는 Firebase 모드에서 Firestore 지속 캐시(mutation queue) 하나뿐이며,
@@ -15,7 +16,8 @@
 import {
   MODE, classIds, classLabels, firebaseConfig, activeProjectId, sdkUrls
 } from './firebase-config.js';
-import { groupEmail, doneKey, locIndexOfDoneKey, pad2, base64Bytes } from './common.js';
+import { groupEmail, doneKey, locIndexOfDoneKey, pad2, base64Bytes, ensureSpotIds } from './common.js';
+import { isFractionPoint } from '../map/map-config.js';
 import {
   DEFAULT_FRAME_TEXTS, FRAME_ASSET_KINDS, FRAME_ASSET_MAX_BYTES,
   frameAssetDocId, FRAME_ASSET_META_DOC, DEFAULT_LAYOUT_ID
@@ -187,6 +189,44 @@ export function unsentKeys(state) {
   return keys;
 }
 
+// ── 코스 잠금 판정 (v3.4 §3-C — 3곳 불일치를 하나로 통일) ────────────────
+// 2026-08-21 실측: admin UI는 done>0, MockDB.updateCourse는 done|pending, FirebaseDB는 done
+// 세 곳이 서로 달랐다. 기준을 **서버 done 1건 이상**으로 통일하고 이 함수 하나만 쓴다.
+// 전송 대기(pending)는 서버가 아직 받지 않았으므로 잠그지 않는다 —
+// MockDB 쪽 동작이 이 정렬로 바뀌며, 그것이 의도한 변경이다.
+// 잠금의 이유는 locIndex가 사진 문서 주소이기 때문이고, 그 주소를 실제로 점유하는 것은
+// 서버에 도착한 사진(done)뿐이다.
+export function isCourseLocked(doneMap) {
+  return Object.keys(doneMap || {}).length > 0;
+}
+
+// ── 지도 스팟 좌표 (v3.4 §3-C) ────────────────────────────────────────────
+// 좌표는 `config/mapSpots` 문서 하나에 `byId[spotId] = {x, y}` 로 산다.
+// 키는 불변 spotId다 — 표시 이름을 키로 쓰지 않는다(§5 금지 34).
+// 규칙 파일은 건드리지 않는다. 기존 `config/{doc}`(읽기=인증자·쓰기=교사) 안이다(§5 금지 25).
+export const MAP_SPOTS_DOC = 'mapSpots';
+
+function assertSpotId(spotId) {
+  if (typeof spotId !== 'string' || !spotId.trim()) throw new Error('장소 식별자(spotId)가 없습니다');
+  return spotId.trim();
+}
+
+// 0~1 유한수 판정의 원천은 map-config.js 하나다(F-1). 여기서 다시 쓰지 않는다.
+function assertSpotXy(xy) {
+  if (!isFractionPoint(xy)) throw new Error('좌표가 0~1 범위의 유한수가 아닙니다');
+  return { x: xy.x, y: xy.y };
+}
+
+// 저장본 → 화면이 쓰는 모양. 형식이 깨진 항목은 조용히 버린다(빈 값 반환 계약과 같은 방향).
+function normalizeMapSpots(raw) {
+  const src = (raw && raw.byId) || {};
+  const out = {};
+  Object.keys(src).forEach(function (k) {
+    if (isFractionPoint(src[k])) out[k] = { x: src[k].x, y: src[k].y };
+  });
+  return { byId: out };
+}
+
 // 업로드 payload 크기 검사 (§5 금지 4)
 function assertPayloadSize(fullB64, thumbB64) {
   const fullBytes = base64Bytes(fullB64);
@@ -260,6 +300,10 @@ export async function probeStorageEstimate() {
 // ─────────────────────────────────────────────────────────────────────────
 const DEMO_KEY = 'dku:demo';
 const DEMO_REJECT_KEY = 'dku:demo:forceReject';
+// mapSpots 읽기 실패 주입 훅 (v3.4 §6 ⑺ · 2차 P-검토 A-4).
+// 「셸은 설치됐는데 mapSpots만 캐시에 없는 첫 지도 진입」을 데모 모드에서 재현한다.
+// 앱 완전 첫 방문 오프라인은 셸 자체가 없어 시험할 수 없으므로 이 훅으로 대신한다.
+const DEMO_MAPSPOTS_FAIL_KEY = 'dku:demo:failMapSpots';
 
 function demoCourse(groupNo) {
   const out = [];
@@ -270,7 +314,8 @@ function demoCourse(groupNo) {
       mission: '[데모] ' + groupNo + '모둠 ' + (i + 1) + '번째 미션 안내문입니다. 실제 미션은 관리 화면에서 입력합니다.'
     });
   }
-  return out;
+  // 데모 코스도 실제와 같은 계약을 갖는다 — 항목마다 불변 spotId(§3-C).
+  return ensureSpotIds(out);
 }
 
 function demoSeed() {
@@ -588,6 +633,24 @@ class MockDB {
     return c.frameAssetMeta || {};
   }
 
+  // ── 지도 스팟 좌표 (§3-C) ───────────────────────────────────────────────
+  // 읽기 실패는 던지지 않고 **빈 값**을 돌려준다 — 좌표가 없어도 업로드는 그대로 되어야 한다
+  // (추정 6: 좌표 미지정 장소는 지도 아래 「위치 미지정」 줄로 내려가고 기능 저하가 0이다).
+  _readMapSpots() {
+    if (localStorage.getItem(DEMO_MAPSPOTS_FAIL_KEY)) {
+      throw new Error('mapSpots를 읽지 못했습니다(데모 주입)');
+    }
+    return (this._ensureStore().config || {}).mapSpots || {};
+  }
+
+  async getMapSpots() {
+    try {
+      return normalizeMapSpots(this._readMapSpots());
+    } catch (e) {
+      return { byId: {} };
+    }
+  }
+
   // 한 프레임의 배경·오버레이 이미지 본문. 없는 슬롯은 키 자체를 넣지 않는다.
   async getFrameAssetImages(frameId) {
     const c = this._ensureStore().config || {};
@@ -679,7 +742,8 @@ class MockDB {
       async updateCourse(classId, gid, course) {
         const g = self._group(classId, gid);
         if (!g) throw new Error('없는 모둠입니다');
-        const hasDone = Object.keys(g.done || {}).length > 0 || Object.keys(g.pending || {}).length > 0;
+        // 잠금 판정은 db.js의 단일 함수 하나만 쓴다(§3-C). 전송 대기는 잠그지 않는다.
+        const hasDone = isCourseLocked(g.done);
         if (hasDone) {
           if (course.length < g.course.length) throw new Error('첫 완료 이후에는 장소를 삭제할 수 없습니다');
           for (let i = 0; i < g.course.length; i += 1) {
@@ -688,8 +752,33 @@ class MockDB {
             }
           }
         }
-        g.course = course;
+        // spotId가 없는 항목에 여기서 부여한다 — 화면이 어느 경로로 보냈든 저장 시점에
+        // 전 항목이 불변 식별자를 갖는다(§3-C ⑶). 이미 있는 id는 건드리지 않는다.
+        g.course = ensureSpotIds(course);
         self._saveGroup(classId, gid, g);
+        self._emit();
+        return true;
+      },
+
+      // ── 지도 스팟 좌표 (§3-C) ─────────────────────────────────────────
+      // 개별 필드 merge다 — 다른 스팟의 좌표를 지우지 않는다.
+      async setMapSpot(spotId, xy) {
+        const id = assertSpotId(spotId);
+        const p = assertSpotXy(xy);
+        const s = self._ensureStore();
+        if (!s.config.mapSpots) s.config.mapSpots = { byId: {} };
+        if (!s.config.mapSpots.byId) s.config.mapSpots.byId = {};
+        s.config.mapSpots.byId[id] = p;
+        self._write(s);
+        self._emit();
+        return p;
+      },
+
+      async clearMapSpot(spotId) {
+        const id = assertSpotId(spotId);
+        const s = self._ensureStore();
+        if (s.config.mapSpots && s.config.mapSpots.byId) delete s.config.mapSpots.byId[id];
+        self._write(s);
         self._emit();
         return true;
       },
@@ -920,18 +1009,99 @@ class FirebaseDB {
   // 서버 스냅샷의 courseRev를 캐시본과 **실제로 비교**한다(A-3).
   // 어긋나면 서버본으로 조용히 다시 캐시하고(무중단 자가 복구), 그것이 안 되면
   // _revMismatch를 세워 화면이 「로그아웃 후 다시 로그인」을 안내하게 한다.
+  // 캐시 코스에는 spotId가 없는데 서버 코스에는 있는 상태인가 (재작업 A-1).
+  //
+  // 왜 필요한가: `admin.updateCourse`는 `course`만 쓰고 **`courseRev`를 올리지 않는다.**
+  // spotId는 바로 거기서 처음 생긴다. 그런데 아래 _reconcileRev의 재캐시 조건은
+  // courseRev 비교 하나뿐이고, getState·onGroup의 코스 조립은 캐시본을 항상 앞세운다.
+  // 그래서 v3에서 이미 로그인해 둔 기기(리허설·행사 아침)는 교사가 좌표를 다 찍어도
+  // 옛 캐시를 계속 써서 **핀이 0개인 지도**를 영구히 보게 된다. 재로그인 말고는 길이 없다.
+  // courseRev 비교는 그대로 두고 이 조건을 OR로 얹어 자가 복구시킨다(A-3 계약 유지).
+  _cacheLacksSpotIds(g) {
+    if (!g || !Array.isArray(g.course)) return false;
+    const serverHasAny = g.course.some(function (c) {
+      return c && typeof c.spotId === 'string' && c.spotId;
+    });
+    if (!serverHasAny) return false;
+    const cached = this.getCachedCourse();
+    const list = cached ? cached.course : null;
+    if (!Array.isArray(list)) return false;
+    return list.some(function (c) {
+      return !c || typeof c.spotId !== 'string' || !c.spotId;
+    });
+  }
+
   _reconcileRev(g, metadata) {
     const s = this.session;
     if (!s) return;
     this._settlePending(g, metadata);
     if (!g || g.courseRev == null) return;
     const cachedRev = this._cachedCourse ? this._cachedCourse.courseRev : s.courseRev;
-    if (cachedRev === g.courseRev) { this._revMismatch = false; return; }
+    if (cachedRev === g.courseRev) {
+      this._revMismatch = false;
+      // 판은 같은데 좌표 키만 새로 생긴 경우. 여기서 서버본으로 다시 캐시한다.
+      // 저장에 실패해도 **재로그인 사유가 아니다** — courseRev는 여전히 같으므로
+      // _writeCourseCache가 세웠을 수 있는 불일치 표시를 되돌린다.
+      if (this._cacheLacksSpotIds(g)) {
+        const stored = this._writeCourseCache(g.course, g.courseRev);
+        this._revMismatch = false;
+        // 저장에 실패하는 창(iOS 프라이빗·쿼터 초과)에서는 메모리 사본으로만 이번 세션을
+        // 버틴다 — 새로고침하면 spotId 없는 옛 캐시가 되살아나 지도가 다시 빈다.
+        // 재로그인 안내를 띄울 사안은 아니지만(코스 판은 같다) 조용히 넘기지도 않는다(B-9).
+        if (!stored && !this._spotCacheWarned) {
+          this._spotCacheWarned = true;
+          console.warn('[db] 지도 좌표 키를 이 창의 저장소에 남기지 못했습니다.'
+            + ' 새로고침하면 지도가 빈 채로 뜰 수 있습니다(사생활 보호 창·저장 공간 부족).');
+        }
+      }
+      return;
+    }
     if (Array.isArray(g.course)) {
       this._writeCourseCache(g.course, g.courseRev);
     } else {
       this._revMismatch = true;
     }
+  }
+
+  // 화면에 넘길 done 집합 (재작업 A-2 — §5 금지 16 방어).
+  //
+  // 오프라인에서 completeLocation이 하는 batch.set(groupRef, {done:{L0:serverTimestamp()}})은
+  // Firestore **지연 보상(latency compensation)** 때문에 로컬 스냅샷의 done에 그 키를
+  // 즉시 만들어 넣는다(값은 null이지만 키는 존재한다). statusOf는 done을 pending보다 먼저
+  // 보므로(db.js 상단) 그대로 넘기면 아직 전송도 못 한 사진이 「완료(동기화됨)」로 뜬다 —
+  // 같은 화면의 미전송 배지와 정면으로 모순되고, 지도에서는 완료 스탬프·폴라로이드까지
+  // 붙어 증폭된다. MockDB는 오프라인에 pending에만 넣으므로 데모에서는 재현되지 않는다.
+  //
+  // statusOf의 시그니처·본문은 건드리지 않는다(§5 금지 29). **넘기기 전에** 이 인스턴스가
+  // 대기로 알고 있는 키를 done에서 뺀다.
+  //
+  // **불변식: 마스킹에 쓰는 집합 == state의 `pending` 필드를 채우는 집합.**
+  // 둘이 어긋나면 그 장소가 done도 pending도 아닌 상태로 떨어져 「현재 장소」로 되돌아간다.
+  // 그래서 두 자리가 _waitingKeys() **하나**를 부른다 — 한쪽만 넓히는 변형이 나올 수 없다.
+  //
+  // 서버가 확정하면 _settlePending이 대기 키를 지우므로(이 함수보다 먼저, _reconcileRev
+  // 첫 줄에서 돈다) done이 정상 노출된다.
+  //
+  // 재작업 A-5: 예전 판은 메모리(_pendingKeys)만 봤다. 그런데 **오프라인 업로드 → 폰 잠금 →
+  // 다음 장소로 이동 → 앱 재개(새 페이지 로드)** 는 행사 당일의 기본 동작이고, 그 창에서는
+  // 메모리 맵이 비어 있다. 그러면 지연 보상된 done 키가 그대로 노출되어 「완료(동기화됨)」가
+  // 뜨고, pending도 비어 **미전송 배지까지 사라진다** — A-2가 막으려던 화면이 경고 장치까지
+  // 꺼진 채 재현된다. Firestore mutation queue의 대기 쓰기는 IndexedDB에 남아 있으므로
+  // 영속 기록(localStorage)이 그 창에서 유일한 신호다.
+  _waitingKeys() {
+    return Object.assign({}, this._readPersistedPending(), this._pendingKeys);
+  }
+
+  _visibleDone(g) {
+    const done = (g && g.done) || {};
+    const waiting = this._waitingKeys();
+    const keys = Object.keys(waiting);
+    if (!keys.length) return done;
+    const out = {};
+    Object.keys(done).forEach(function (k) {
+      if (!Object.prototype.hasOwnProperty.call(waiting, k)) out[k] = done[k];
+    });
+    return out;
   }
 
   // ── 전송 대기 키의 영속 기록 (A-7) ──────────────────────────────────────
@@ -1056,8 +1226,8 @@ class FirebaseDB {
       course: (cached && cached.course) || g.course || [],
       courseRev: g.courseRev,
       revMismatch: this._revMismatch === true,
-      done: g.done || {},
-      pending: Object.assign({}, this._pendingKeys),
+      done: this._visibleDone(g),   // 지연 보상으로 앞서 나온 done 키를 걷어낸다(A-2)
+      pending: this._waitingKeys(), // 마스킹과 **같은 집합**이어야 한다(A-5 불변식)
       failed: failed.map(function (f) { return doneKey(f.locIndex); }),
       lastSyncAt: g.lastSyncAt || null
     };
@@ -1228,6 +1398,25 @@ class FirebaseDB {
     }
   }
 
+  // ── 지도 스팟 좌표 (§3-C) ───────────────────────────────────────────────
+  // 작은 문서 1건이다. 화면 초기화에서 **1회만** 부른다 — 재렌더마다 부르면 용량 산식이
+  // 깨진다(§3-B 캐시 계약 · §5 금지 35). 호출 횟수를 지키는 것은 화면 쪽 책임이다.
+  async _readMapSpots() {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDoc(sdk.fs.doc(this.fs, 'config', MAP_SPOTS_DOC));
+    return snap.exists() ? (snap.data() || {}) : {};
+  }
+
+  async getMapSpots() {
+    try {
+      return normalizeMapSpots(await this._readMapSpots());
+    } catch (e) {
+      // 오프라인 첫 진입이면 캐시본이 없다. 여기서 던지면 지도 화면 자체가 뜨지 않는다 —
+      // 좌표 없이도 「위치 미지정」 줄과 목록 전환으로 기능이 유지되어야 한다(§6 ⑺).
+      return { byId: {} };
+    }
+  }
+
   // 한 프레임의 이미지 본문(최대 2건). 슬롯마다 문서가 따로라 1MiB 한도를 장당으로 쓴다.
   async getFrameAssetImages(frameId) {
     const sdk = await this._loadSdk();
@@ -1261,8 +1450,8 @@ class FirebaseDB {
           course: (cached && cached.course) || g.course || [],
           courseRev: g.courseRev,
           revMismatch: self._revMismatch === true,
-          done: g.done || {},
-          pending: Object.assign({}, self._pendingKeys),
+          done: self._visibleDone(g),   // 지연 보상으로 앞서 나온 done 키를 걷어낸다(A-2)
+          pending: self._waitingKeys(), // 마스킹과 **같은 집합**이어야 한다(A-5 불변식)
           failed: failed.map(function (f) { return doneKey(f.locIndex); }),
           hasPendingWrites: snap.metadata.hasPendingWrites,
           lastSyncAt: snap.metadata.fromCache ? null : new Date().toISOString()
@@ -1345,7 +1534,7 @@ class FirebaseDB {
           } else {
             await sdk.fs.setDoc(gRef, {
               groupNo: gid, email: email, courseRev: rev,
-              course: course || [], done: {}, createdAt: sdk.fs.serverTimestamp()
+              course: ensureSpotIds(course || []), done: {}, createdAt: sdk.fs.serverTimestamp()
             });
           }
           return { gid: gid, email: email, reissued: gSnap.exists() };
@@ -1366,7 +1555,8 @@ class FirebaseDB {
         const snap = await sdk.fs.getDoc(ref);
         if (!snap.exists()) throw new Error('없는 모둠입니다');
         const g = snap.data();
-        const hasDone = Object.keys(g.done || {}).length > 0;
+        // 잠금 판정은 db.js의 단일 함수 하나만 쓴다(§3-C).
+        const hasDone = isCourseLocked(g.done);
         if (hasDone) {
           const old = g.course || [];
           if (course.length < old.length) throw new Error('첫 완료 이후에는 장소를 삭제할 수 없습니다');
@@ -1376,7 +1566,32 @@ class FirebaseDB {
             }
           }
         }
-        await sdk.fs.updateDoc(ref, { course: course });
+        // spotId 없는 항목에 저장 시점에 부여한다(§3-C ⑶). 이미 있는 id는 그대로 간다.
+        await sdk.fs.updateDoc(ref, { course: ensureSpotIds(course) });
+        return true;
+      },
+
+      // ── 지도 스팟 좌표 (§3-C) ─────────────────────────────────────────
+      // 개별 필드 merge다 — 다른 스팟의 좌표를 지우지 않는다.
+      // 규칙은 기존 config/{doc} 그대로 쓴다(§5 금지 25).
+      async setMapSpot(spotId, xy) {
+        const id = assertSpotId(spotId);
+        const p = assertSpotXy(xy);
+        const sdk = await self._loadSdk();
+        const patch = { byId: {} };
+        patch.byId[id] = p;
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', MAP_SPOTS_DOC), patch, { merge: true });
+        return p;
+      },
+
+      async clearMapSpot(spotId) {
+        const id = assertSpotId(spotId);
+        const sdk = await self._loadSdk();
+        const patch = { byId: {} };
+        // deleteField()가 있으면 필드를 지우고, 없으면 null로 덮는다.
+        // 읽기 쪽(normalizeMapSpots)이 0~1 유한수가 아닌 값을 버리므로 어느 쪽이든 결과가 같다.
+        patch.byId[id] = typeof sdk.fs.deleteField === 'function' ? sdk.fs.deleteField() : null;
+        await sdk.fs.setDoc(sdk.fs.doc(self.fs, 'config', MAP_SPOTS_DOC), patch, { merge: true });
         return true;
       },
 

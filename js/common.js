@@ -126,6 +126,79 @@ export function formatTime(value) {
     ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
 
+// 서버 타임스탬프·Date·문자열을 Date로. 못 읽으면 null이다 — 기기 시계로 메우지 않는다.
+// v3.4 §2-9: teacher.html의 지역 함수였던 것을 공용으로 승격했다(map-view·교사 화면이 함께 쓴다).
+// 시그니처·동작은 그대로다(§5 금지 29의 「기존 이름·시그니처 불변」과 충돌하지 않는 명시 작업).
+export function toDateSafe(v) {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') {
+    try { return v.toDate(); } catch (e) { return null; }
+  }
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ── 모둠 색 팔레트 (v3.4 추정 7 — 단일 원천) ──────────────────────────────
+// 12색 고정. 학년 전체 12개 반 확장(이월 §6.9)까지 번호가 겹치지 않는다.
+// 지도 핀·경로·폴라로이드 테두리가 전부 이 값을 쓴다. 색을 바꾸려면 여기만 고친다.
+export const GROUP_COLORS = [
+  '#c0392b', '#2d7d5a', '#2b5fa8', '#8a4fa8',
+  '#b8791f', '#127c86', '#8c5a2b', '#7a2f5e',
+  '#3f6f2a', '#25507a', '#a03a63', '#5c4a9c'
+];
+
+// 모둠 번호(1부터 · '01' 같은 0패딩 문자열도 받는다) → 팔레트 색 1개.
+export function groupColor(groupNo) {
+  const n = Number(String(groupNo == null ? '' : groupNo).replace(/[^0-9]/g, ''));
+  const i = Number.isFinite(n) && n >= 1 ? (n - 1) : 0;
+  return GROUP_COLORS[i % GROUP_COLORS.length];
+}
+
+// ── 스팟 식별자 (v3.4 §3-C) ───────────────────────────────────────────────
+// 좌표의 키는 **표시 이름이 아니라** 불변 식별자다(§5 금지 34).
+// 이름을 고쳐도, 코스를 복사해도 따라간다.
+function randomHex8() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  // randomUUID가 없는 환경(구형·비보안 컨텍스트)용 폴백. 같은 8자리 16진수를 만든다.
+  const buf = new Uint8Array(4);
+  crypto.getRandomValues(buf);
+  let out = '';
+  for (let i = 0; i < buf.length; i += 1) out += ('0' + buf[i].toString(16)).slice(-2);
+  return out;
+}
+
+// taken = 이미 쓰인 id 목록(배열·Set 모두 받는다). 코스 안 충돌을 검사한다(§3-C ⑴).
+export function makeSpotId(taken) {
+  const used = taken instanceof Set ? taken : new Set(taken || []);
+  for (let tries = 0; tries < 50; tries += 1) {
+    const id = 's-' + randomHex8();
+    if (!used.has(id)) return id;
+  }
+  return 's-' + randomHex8() + '-' + Date.now().toString(36);
+}
+
+// 코스 배열의 모든 항목이 spotId를 갖도록 보장한다. **이미 있는 id는 절대 바꾸지 않는다** —
+// 로드·복사·추가·재정렬 어느 경로로 들어와도 좌표가 고아가 되지 않게 하는 지점이다(§3-C ⑵).
+// 원본 배열을 그 자리에서 고치고 같은 배열을 돌려준다.
+export function ensureSpotIds(course) {
+  const list = course || [];
+  const used = new Set();
+  list.forEach(function (loc) {
+    if (loc && typeof loc.spotId === 'string' && loc.spotId) used.add(loc.spotId);
+  });
+  list.forEach(function (loc) {
+    if (!loc) return;
+    // 없는 경우에만 만든다. 있으면 그대로 둔다 — 여기서 갈아 끼우면 좌표가 고아가 된다.
+    if (typeof loc.spotId !== 'string' || !loc.spotId) {
+      loc.spotId = makeSpotId(used);
+      used.add(loc.spotId);
+    }
+  });
+  return list;
+}
+
 // ── 기기 정리 유틸 (§2-2 버튼이 db.wipeLocalData()와 함께 호출) ────────────
 // 앱이 브라우저에 남긴 캐시·localStorage를 지운다.
 // 주의: 논리 삭제이며 복구 불가능한 소거가 아니다(Firebase 공식 문서 · v3.1 §2-18).

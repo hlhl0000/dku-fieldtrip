@@ -1,0 +1,97 @@
+{
+  "package": "지도 자산 패키지",
+  "version": "1",
+  "createdAt": "2026-08-21",
+  "spec": "설계지시안_단국대네컷_v3.4.md §2 · §3 단계 1",
+  "files": [
+    {
+      "path": "site/map/campus-map.svg",
+      "role": "일러스트 지도 (배경 · <img>로 로드)"
+    },
+    {
+      "path": "site/map/map-config.js",
+      "role": "지도 수치 단일 원천 (ES 모듈)"
+    },
+    {
+      "path": "site/map/map-reference.md",
+      "role": "지리 기준 원본 · 승인 심사 자료"
+    },
+    {
+      "path": "site/map/map-manifest.json",
+      "role": "패키지 매니페스트 (이 파일)"
+    }
+  ],
+  "temporaryFiles": [
+    {
+      "path": "site/map/map-preview.html",
+      "role": "지리 승인 심사용 미리보기 — 단계 2 완료 후 삭제",
+      "deleted": "2026-08-22",
+      "deletedBy": "실행자 B (단계 2 완료 · 설계지시안 v3.4 §2)"
+    }
+  ],
+  "viewBox": "0 0 900 1300",
+  "coordinateSystem": "fraction-0-1",
+  "colorSource": "common.js",
+  "reference": "map-reference.md",
+  "landmarks": [
+    {
+      "id": "lm-gate",
+      "name": "정문",
+      "x": 0.5,
+      "y": 0.7,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-library",
+      "name": "중앙도서관",
+      "x": 0.35,
+      "y": 0.54,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-museum",
+      "name": "단국대 박물관",
+      "x": 0.67,
+      "y": 0.34,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-artshall",
+      "name": "죽전 포은아트홀",
+      "x": 0.76,
+      "y": 0.83,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-bojeong",
+      "name": "보정동 카페거리 입구",
+      "x": 0.33,
+      "y": 0.86,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-tancheon",
+      "name": "탄천",
+      "x": 0.14,
+      "y": 0.78,
+      "geoVerified": false
+    }
+  ],
+  "geoExceptions": [
+    {
+      "id": "lm-tancheon",
+      "why": "사용자가 「위치 상관 없음」이라 확정(확정 4 · 인터뷰 #5). 미관상 배치이며 지리 검증 대상이 아니다."
+    }
+  ],
+  "approval": {
+    "status": "approved",
+    "reviewer": "사용자(담임교사)",
+    "date": "2026-08-22",
+    "note": "지리 승인 정지점 통과. 포은아트홀=용인포은아트홀(캠퍼스 밖 약 2km) 확인. 구조 유지 조건으로 추후 외부 AI 도구로 SVG 그림 품질 향상 예정 — 교체 시 viewBox 0 0 900 1300 · lm-* id 6종 · 좌표계 fraction-0-1 계약 준수 필수"
+  },
+  "notes": [
+    "colorSource 'common.js'의 모둠 색 팔레트는 단계 2(§2 #9)에서 추가된다 — 2026-08-21 현재 common.js에 팔레트 없음. 지도 자산에는 모둠 색이 들어 있지 않으므로 충돌 없음.",
+    "campus-map.svg는 방위 정렬 지도가 아니라 오르막 동선 모식도다(map-reference.md §1-1).",
+    "approval.status가 'approved'가 되기 전에는 단계 2에 진입하지 않는다(§2)."
+  ]
+}

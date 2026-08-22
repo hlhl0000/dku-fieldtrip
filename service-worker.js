@@ -31,7 +31,12 @@ const SHELL = [
   './js/common.js',
   './js/compress.js',
   './js/fourcut.js',
-  './frames/frames.js'
+  './js/map-view.js',
+  './frames/frames.js',
+  // 지도 자산 (v3.4) — 이 셋이 없으면 캠퍼스 오프라인 첫 진입에서 지도가 뜨지 않는다.
+  // 단, cache.add 실패는 무음이므로 SHELL 등재만으로 오프라인이 증명되지는 않는다(§1-1 #16).
+  './map/campus-map.svg',
+  './map/map-config.js'
 ];
 
 function sdkUrls() {

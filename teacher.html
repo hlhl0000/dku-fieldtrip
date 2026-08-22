@@ -92,6 +92,21 @@ table.teacher-grid th.group-col { background: #eef2f8; }
     <p class="note">사진 칸을 누르면 원본을 불러옵니다. 원본은 누른 사진 1건만 읽습니다.</p>
   </section>
 
+  <!-- ── 지도 뷰 (v3.4) ─────────────────────────────────────────────────
+       추가 서버 읽기 없이 그린다 — 좌표 1문서(mapSpots)만 시작할 때 한 번 읽고,
+       나머지는 이미 구독 중인 onDashboard 데이터(course·done·uploadedAt)로 만든다. -->
+  <section id="map-card" class="card map-card" hidden>
+    <h2 class="section-title">지도에서 보기</h2>
+    <div class="map-toolbar">
+      <div class="field">
+        <label for="map-group">모둠</label>
+        <select id="map-group"></select>
+      </div>
+    </div>
+    <div id="teacher-map"></div>
+    <p id="map-note" class="note"></p>
+  </section>
+
   <!-- ── 원본 보기 (탭했을 때만 1건 읽는다) ─────────────────────────────── -->
   <section id="full-card" class="card" hidden>
     <div class="head-row">
@@ -115,8 +130,10 @@ import { MODE, classIds, classLabels } from './js/firebase-config.js';
 import { db, statusOf } from './js/db.js';
 import {
   classOptions, statusText, STATUS_TEXT, CURRENT_TEXT,
-  setText, el, clear, formatTime, registerServiceWorker
+  setText, el, clear, formatTime, registerServiceWorker, toDateSafe, groupColor
 } from './js/common.js';
+import { createMapView } from './js/map-view.js';
+import { isFractionPoint } from './map/map-config.js';
 
 // 데모 모드 교사 자격 — 이 파일이 단일 원천이다(F-1).
 // 실서버 모드에서는 Firebase 콘솔에서 만든 교사 계정으로 로그인한다.
@@ -179,19 +196,24 @@ classOptions().forEach(function (opt) {
 let unsubscribe = null;
 let currentClassId = null;
 
+// ── 지도 (§3-B 캐시 계약 · §5 금지 35) ────────────────────────────────────
+// mapSpots는 화면 초기화 1곳에서만 읽고 페이지 수명 동안 여기 머문다.
+// 구독 갱신마다 render()가 다시 도는데, 거기서 다시 읽으면 용량 산식이 깨진다.
+let mapSpots = { byId: {} };
+let teacherMap = null;
+let lastRows = [];
+const mapCard = document.getElementById('map-card');
+const mapGroup = document.getElementById('map-group');
+const mapNote = document.getElementById('map-note');
+const ALL_GROUPS = '__all__';
+
 // ── 전송 시각 (v3.3 확정 30 · §5 금지 24) ─────────────────────────────────
 // 여기 뜨는 시각은 **서버가 사진을 받은 시각**이다. 학생이 사진을 찍은 시각이 아니다 —
 // 오프라인에서 찍어 두었다가 나중에 전송되면 둘은 실제로 다르다. 그래서 라벨에 「전송」을
 // 박아 둔다. serverTimestamp()는 서버가 확정하기 전 로컬 스냅샷에서 null이므로, 그때는
 // 기기 시계로 메우지 않고 확인 중이라고 적는다(§5 금지 6 — 클라이언트 시계 단독 사용 금지).
-function toDateSafe(v) {
-  if (!v) return null;
-  if (typeof v.toDate === 'function') {
-    try { return v.toDate(); } catch (e) { return null; }
-  }
-  const d = v instanceof Date ? v : new Date(v);
-  return isNaN(d.getTime()) ? null : d;
-}
+// toDateSafe는 v3.4 §2-9에서 common.js로 **공용 승격**했다(map-view·지도 카드가 함께 쓴다).
+// 여기 있던 지역 함수는 지우고 import 한 것을 그대로 쓴다 — 이름·시그니처·동작 동일.
 
 function uploadTimeText(value) {
   const d = toDateSafe(value);
@@ -211,6 +233,8 @@ function render(rows) {
   clear(gridHead);
   clear(gridBody);
   gridEmpty.hidden = rows.length > 0;
+  lastRows = rows;
+  renderMapGroupSelect(rows);
 
   let cols = 0;
   rows.forEach(function (r) { cols = Math.max(cols, (r.course || []).length); });
@@ -292,7 +316,108 @@ function render(rows) {
   });
 
   setText(lastUpdate, formatTime(new Date()));
+  // 지도는 같은 데이터로 같은 사이클에서 그린다. 추가 서버 읽기 없음.
+  renderMapCard();
 }
+
+// ── 지도 뷰 렌더링 ────────────────────────────────────────────────────────
+// §3-A 진리표의 교사 열을 그대로 따른다:
+//   synced → 완료 핀 + 「전송 HH:MM」(uploadedAt만. 없으면 「전송 시각 확인 중」)
+//   queued·error → **표시하지 않는다.** 교사 구독분에는 애초에 오지 않는다
+//                  (onDashboard는 서버 done만 준다). 완료로 그리지 않는다(§5 금지 30).
+//   current·locked → 윤곽 핀
+function mapRowFor(gid) {
+  return lastRows.filter(function (r) { return r.gid === gid; })[0] || null;
+}
+
+// 한 모둠의 코스를 좌표가 있는 스팟 목록으로 바꾼다. 서버 읽기 없음.
+function spotsOfRow(row, withDetail) {
+  const course = row.course || [];
+  const st0 = { course: course, done: row.done || {}, pending: {}, failed: [] };
+  const thumbByLoc = {};
+  (row.thumbs || []).forEach(function (t) { if (t) thumbByLoc[t.locIndex] = t; });
+  const color = groupColor(row.groupNo);
+  const out = [];
+  course.forEach(function (loc) {
+    const xy = loc.spotId ? mapSpots.byId[loc.spotId] : null;
+    if (!isFractionPoint(xy)) return;
+    const st = statusOf(st0, loc.locIndex);
+    const t = thumbByLoc[loc.locIndex];
+    out.push({
+      key: row.gid + '-' + loc.locIndex,
+      label: withDetail ? (loc.locIndex + 1) + '. ' + loc.name : '',
+      status: st,
+      color: color,
+      x: xy.x,
+      y: xy.y,
+      thumb: (withDetail && t && t.thumb) ? ('data:' + t.mime + ';base64,' + t.thumb) : null,
+      timeText: st === 'synced' ? uploadTimeText(t && t.uploadedAt) : '',
+      selectable: false
+    });
+  });
+  return { spots: out, color: color };
+}
+
+function renderMapCard() {
+  if (!teacherMap) return;
+  mapCard.hidden = lastRows.length === 0;
+  const pick = mapGroup.value || ALL_GROUPS;
+
+  if (pick === ALL_GROUPS) {
+    // 전체 보기는 **경로만** 그린다(추정 5 — 6모둠 핀이 겹쳐 혼잡해지는 것을 막는다).
+    const routes = [];
+    let placed = 0;
+    lastRows.forEach(function (row) {
+      const r = spotsOfRow(row, false);
+      placed += r.spots.length;
+      if (r.spots.length > 1) {
+        routes.push({ color: r.color, points: r.spots.map(function (s) { return { x: s.x, y: s.y }; }) });
+      }
+    });
+    teacherMap.render({ spots: [], routes: routes, showPhotos: false });
+    setText(mapNote, placed === 0
+      ? '아직 지도에 위치가 지정된 장소가 없습니다. 관리 화면의 「지도에서 위치 찍기」로 지정하세요.'
+      : '전체 보기는 모둠별 경로만 그립니다. 모둠을 고르면 핀·사진·전송 시각이 함께 보입니다.');
+    return;
+  }
+
+  const row = mapRowFor(pick);
+  if (!row) {
+    teacherMap.render({ spots: [], routes: [] });
+    setText(mapNote, '');
+    return;
+  }
+  const r = spotsOfRow(row, true);
+  teacherMap.render({
+    spots: r.spots,
+    routes: r.spots.length > 1
+      ? [{ color: r.color, points: r.spots.map(function (s) { return { x: s.x, y: s.y }; }) }]
+      : [],
+    showPhotos: true
+  });
+  const total = (row.course || []).length;
+  setText(mapNote, r.spots.length === 0
+    ? Number(row.groupNo) + '모둠의 장소 ' + total + '곳에 아직 지도 위치가 지정되지 않았습니다.'
+    : '지도에 그린 것은 서버가 받은 것뿐입니다. 칸에 적힌 시각은 「전송 시각」입니다.');
+}
+
+function renderMapGroupSelect(rows) {
+  const keep = mapGroup.value;
+  clear(mapGroup);
+  const all = document.createElement('option');
+  all.value = ALL_GROUPS;
+  all.textContent = '전체 보기 (경로만)';
+  mapGroup.appendChild(all);
+  rows.forEach(function (r) {
+    const o = document.createElement('option');
+    o.value = r.gid;
+    o.textContent = Number(r.groupNo) + '모둠';
+    mapGroup.appendChild(o);
+  });
+  mapGroup.value = rows.some(function (r) { return r.gid === keep; }) ? keep : ALL_GROUPS;
+}
+
+mapGroup.addEventListener('change', renderMapCard);
 
 // 원본은 눌렀을 때만 읽는다. 구독은 썸네일(photoMeta)까지만 한다.
 async function openFull(gid, locIndex, locName) {
@@ -333,11 +458,31 @@ window.addEventListener('storage', function (e) {
   if (MODE === 'demo' && e.key === 'dku:demo' && currentClassId) subscribe(currentClassId);
 });
 
+// 지도 준비는 페이지 수명 동안 **1회**다(§3-B 캐시 계약 · §5 금지 35).
+// openDashboard는 로그인·자동 복원 두 경로에서 불리므로 이 플래그로 중복 읽기를 막는다.
+// 좌표 읽기는 **비차단이다**(재작업 A-3) — 세 화면이 같은 모양을 쓴다.
+// 대시보드는 이 읽기를 기다리지 않고 먼저 뜨고, 좌표가 도착하면 지도만 다시 그린다.
+let mapReady = false;
+function ensureMap() {
+  if (mapReady) return;
+  mapReady = true;
+  teacherMap = createMapView(document.getElementById('teacher-map'), { variant: 'teacher' });
+  Promise.resolve()
+    .then(function () { return db.getMapSpots(); })
+    .then(function (v) {
+      if (!v || !v.byId) return;
+      mapSpots = v;
+      renderMapCard();
+    })
+    .catch(function () { /* 좌표 없이도 그리드는 그대로 쓴다 */ });
+}
+
 function openDashboard(classId) {
   loginCard.hidden = true;
   dashboard.hidden = false;
   nav.hidden = false;
   subscribe(classId);
+  ensureMap();
 }
 
 // ── 로그인 ────────────────────────────────────────────────────────────────
