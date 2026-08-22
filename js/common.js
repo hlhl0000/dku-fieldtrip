@@ -44,6 +44,28 @@ export function statusText(state) {
   return STATUS_TEXT[state] || STATUS_TEXT.locked;
 }
 
+// ── 미션 카드 문면 (목록 카드 · 지도 시트 공용 단일 원천 · F-1) ─────────────
+// 「인증 조건」은 장소마다 다르지 않은 **전 장소 공통 고정문**이다. 코스 항목에는
+// name·mission뿐이라 이 문장의 원천이 코드밖에 없다. 목록 카드와 지도 시트가
+// 같은 문장을 보여야 하므로 화면 파일에 리터럴로 적지 않는다.
+//
+// 읽는 순서도 여기서 정한다 — 학생이 먼저 읽어야 하는 것은 **이 장소에서 무엇을
+// 하는가**(미션)이고, 인증 조건은 그다음에 확인하는 보조 정보다. 두 라벨을 함께
+// 두는 이유는 그 순서가 화면에서 뒤집히지 않게 하기 위해서다.
+export const MISSION_LABEL = '미션';
+export const PHOTO_RULE_LABEL = '인증 조건';
+export const PHOTO_RULE_TEXT = '모둠원 전원이 보이는 단체사진';
+
+// 인증 조건 줄의 DOM 모양을 만드는 단일 함수. 목록 카드는 새 요소로, 지도 시트는
+// 정적 마크업의 빈 컨테이너로 들어오지만 **안쪽 모양은 반드시 같아야** CSS가 두
+// 화면에 똑같이 걸린다. 두 곳에서 각자 조립하면 한쪽만 바뀐다(F-1).
+export function fillPhotoRule(box) {
+  clear(box);
+  box.appendChild(el('span', 'fixed-note-label', PHOTO_RULE_LABEL));
+  box.appendChild(el('span', 'fixed-note-text', PHOTO_RULE_TEXT));
+  return box;
+}
+
 // ── 반 목록 (인증 전 서버 읽기 금지 · v3.1 §1-3) ──────────────────────────
 export function classOptions() {
   return classIds.map(function (id) {

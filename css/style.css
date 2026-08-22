@@ -180,22 +180,63 @@ button:disabled {
 }
 .loc-name { font-weight: 700; word-break: keep-all; }
 
+/* 미션 = 이 장소에서 무엇을 하는가. 목록 카드와 지도 시트 모두에서 **가장 먼저**
+   읽혀야 한다. 예전에는 미션이 흐린 14px이고 전 장소 공통인 인증 조건이 굵은 박스라
+   순서가 뒤집혀 있었다(선생님이 입력한 짧은 미션일수록 심했다). 강조선 + 라벨로
+   미션을 주역으로 올리고, 인증 조건은 보조 톤으로 내린다. */
+.mission-block {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin: 0 0 10px;
+}
+.mission-block.is-locked {
+  border-left-color: var(--line);
+}
+.field-label {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+.mission-block.is-locked .field-label { color: var(--lock); }
+
 .loc-mission {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.55;
+  word-break: keep-all;
+}
+/* 블록 안에서는 바깥 여백을 블록이 맡는다. 잠금 안내문은 블록 밖에서도 쓰이므로
+   위의 기본 margin을 남겨 둔다. */
+.mission-block .loc-mission { margin: 0; }
+.locked-text { color: var(--lock); font-weight: 400; }
+
+/* 인증 조건 = 전 장소 공통 고정문. 미션을 읽은 다음 확인하는 보조 정보다. */
+.fixed-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: #f2f4f7;
+  border-radius: 8px;
+  font-size: 13px;
   color: var(--ink-weak);
   word-break: keep-all;
 }
-.locked-text { color: var(--lock); }
-
-.fixed-note {
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  background: #eef2f8;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
+.fixed-note-label {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e2e6ec;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
+.fixed-note-text { min-width: 0; }
 
 .loc-thumb {
   display: block;
@@ -399,6 +440,15 @@ button:disabled {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+/* 상태 배지를 제목 줄에 붙인다. 예전에는 배지가 한 줄을 통째로 먹어 시트가
+   길어지고, 좁은 화면에서 미션이 접힘선 아래로 밀렸다. */
+.spot-sheet .sheet-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 .spot-sheet h2 { margin: 0; font-size: 17px; word-break: keep-all; }
 .spot-sheet .sheet-close { width: auto; flex: 0 0 auto; padding: 8px 12px; }

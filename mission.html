@@ -87,12 +87,19 @@
 <div id="spot-sheet" class="spot-sheet" role="dialog" aria-labelledby="sheet-title" hidden>
   <div class="spot-sheet-inner">
     <div class="sheet-head">
-      <h2 id="sheet-title"></h2>
+      <div class="sheet-heading">
+        <h2 id="sheet-title"></h2>
+        <span id="sheet-badge" class="badge"></span>
+      </div>
       <button id="sheet-close" type="button" class="secondary sheet-close">닫기</button>
     </div>
-    <p id="sheet-badge-row"><span id="sheet-badge" class="badge"></span></p>
-    <p id="sheet-mission" class="loc-mission"></p>
-    <p id="sheet-fixed" class="fixed-note" hidden>모둠원 전원이 보이는 단체사진</p>
+    <!-- 미션이 카드에서 가장 먼저 읽혀야 한다. 라벨은 #sheet-mission **밖**에 둔다 —
+         e2e가 이 요소의 textContent를 미션 원문 그대로로 단언한다(S32). -->
+    <div id="sheet-mission-block" class="mission-block">
+      <p id="sheet-mission-label" class="field-label"></p>
+      <p id="sheet-mission" class="loc-mission"></p>
+    </div>
+    <div id="sheet-fixed" class="fixed-note" hidden></div>
     <img id="sheet-thumb" class="sheet-thumb" alt="인증사진 미리보기" hidden>
     <p id="sheet-hint" class="note"></p>
     <div class="button-row">
@@ -119,6 +126,7 @@ import { compressPhoto } from './js/compress.js';
 import { FRAMES } from './frames/frames.js';
 import {
   requireLogin, clearSession, statusText, CURRENT_TEXT, STATUS_TEXT,
+  MISSION_LABEL, fillPhotoRule,
   setText, el, clear, formatTime, markBusy, markIdle,
   registerServiceWorker, clearAppShellAndStorage, doneKey, groupColor
 } from './js/common.js';
@@ -160,8 +168,14 @@ const mapLegend = document.getElementById('map-legend');
 const sheet = document.getElementById('spot-sheet');
 const sheetTitle = document.getElementById('sheet-title');
 const sheetBadge = document.getElementById('sheet-badge');
+const sheetMissionBlock = document.getElementById('sheet-mission-block');
+const sheetMissionLabel = document.getElementById('sheet-mission-label');
 const sheetMission = document.getElementById('sheet-mission');
 const sheetFixed = document.getElementById('sheet-fixed');
+
+// 시트의 두 고정 문면은 목록 카드와 같은 원천에서 한 번만 채운다(F-1).
+setText(sheetMissionLabel, MISSION_LABEL);
+fillPhotoRule(sheetFixed);
 const sheetThumb = document.getElementById('sheet-thumb');
 const sheetHint = document.getElementById('sheet-hint');
 const sheetPick = document.getElementById('sheet-pick');
@@ -300,8 +314,12 @@ function paintSheet() {
   setText(sheetBadge, st === 'current' ? CURRENT_TEXT : statusText(st));
 
   if (st === 'locked') {
+    // 잠긴 장소에는 보여 줄 미션이 없다. 「미션」 라벨과 강조선을 함께 걷어
+    // 안내문이 미션인 것처럼 읽히지 않게 한다.
     setText(sheetMission, '앞 장소를 마치면 열립니다.');
     sheetMission.className = 'loc-mission locked-text';
+    sheetMissionBlock.className = 'mission-block is-locked';
+    sheetMissionLabel.hidden = true;
     sheetFixed.hidden = true;
     sheetThumb.hidden = true;
     sheetThumb.removeAttribute('src');
@@ -312,6 +330,8 @@ function paintSheet() {
   }
 
   sheetMission.className = 'loc-mission';
+  sheetMissionBlock.className = 'mission-block';
+  sheetMissionLabel.hidden = false;
   setText(sheetMission, loc.mission);
   sheetFixed.hidden = false;
 
@@ -429,8 +449,12 @@ function render() {
       return;
     }
 
-    card.appendChild(el('p', 'loc-mission', loc.mission));
-    card.appendChild(el('p', 'fixed-note', '모둠원 전원이 보이는 단체사진'));
+    // 지도 시트와 **같은 모양**으로 조립한다. 라벨은 loc-mission 밖에 둔다.
+    const missionBlock = el('div', 'mission-block');
+    missionBlock.appendChild(el('p', 'field-label', MISSION_LABEL));
+    missionBlock.appendChild(el('p', 'loc-mission', loc.mission));
+    card.appendChild(missionBlock);
+    card.appendChild(fillPhotoRule(el('div', 'fixed-note')));
 
     const thumb = document.createElement('img');
     thumb.id = 'thumb-' + loc.locIndex;
