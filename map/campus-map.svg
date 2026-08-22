@@ -1,19 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1300" width="900" height="1300" role="img" aria-labelledby="mapTitle mapDesc" preserveAspectRatio="xMidYMid meet">
 <title id="mapTitle">단국대학교 죽전캠퍼스 현장체험학습 지도</title>
-<desc id="mapDesc">빈티지 여행로그풍 손그림 일러스트 지도. 위쪽은 캠퍼스 언덕 위(법화산 능선·단국대 박물관), 가운데는 중앙도서관과 평화의 광장, 아래쪽은 정문과 그 바깥의 죽전역 방면(죽전 포은아트홀·보정동 카페거리·탄천). 방위 정렬 지도가 아니라 오르막 동선 모식도.</desc>
+<desc id="mapDesc">빈티지 여행로그풍 손그림 일러스트 지도. 위쪽은 캠퍼스 언덕 위(법화산 능선·대운동장·석주선기념박물관·난파기념음악관·단국역사관), 가운데는 평화의 광장과 곰상·퇴계기념중앙도서관·들샘길, 아래쪽은 정문과 그 바깥의 죽전역 방면(용인포은아트홀·보정동 카페거리·탄천). 방위 정렬 지도가 아니라 오르막 동선 모식도이며, 캠퍼스 밖 두 곳은 모두 죽전역에서 갈라져 간다.</desc>
 
 <style>
   .ink   { fill: none; stroke: #6f5f47; stroke-linecap: round; stroke-linejoin: round; }
   .ink2  { fill: none; stroke: #907d5f; stroke-linecap: round; stroke-linejoin: round; }
   .thin  { stroke-width: 1.6; }
   .med   { stroke-width: 2.4; }
-  .bold  { stroke-width: 3.4; }
   .wall  { fill: #f3e8cd; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
+  .wall2 { fill: #e9dbb6; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
   .roof  { fill: #cf9057; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
   .roof2 { fill: #b0703c; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
+  .roof3 { fill: #9d8f6a; stroke: #6f5f47; stroke-width: 2.4; stroke-linejoin: round; }
   .leaf  { fill: #8ea578; stroke: #5f7550; stroke-width: 1.8; stroke-linejoin: round; }
   .leaf2 { fill: #9db089; stroke: #5f7550; stroke-width: 1.8; stroke-linejoin: round; }
   .trunk { fill: none; stroke: #8a6b46; stroke-width: 3; stroke-linecap: round; }
+  .shadow{ fill: #e2d5b0; opacity: .7; }
   .t     { font-family: 'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR','Nanum Gothic','Helvetica Neue',sans-serif; }
   .lbl   { font-size: 25px; font-weight: 700; fill: #5d4d38; text-anchor: middle;
            paint-order: stroke; stroke: #f5edd8; stroke-width: 6px; stroke-linejoin: round; }
@@ -21,10 +23,12 @@
            paint-order: stroke; stroke: #f5edd8; stroke-width: 5px; stroke-linejoin: round; }
   .tiny  { font-size: 15px; font-weight: 600; fill: #988563; text-anchor: middle;
            paint-order: stroke; stroke: #f5edd8; stroke-width: 4px; stroke-linejoin: round; }
-  .ttl   { font-size: 40px; font-weight: 800; fill: #fdf6e3; text-anchor: middle; letter-spacing: 1.5px; }
-  .ttl2  { font-size: 18px; font-weight: 700; fill: #f3d9bd; text-anchor: middle; letter-spacing: 5px; }
+  .ttl   { font-size: 38px; font-weight: 800; fill: #fdf6e3; text-anchor: middle; letter-spacing: 1.5px; }
+  .ttl2  { font-size: 17px; font-weight: 700; fill: #f3d9bd; text-anchor: middle; letter-spacing: 5px; }
   .path  { fill: none; stroke: #b0713f; stroke-width: 5; stroke-linecap: round;
            stroke-dasharray: 2 15; opacity: .85; }
+  .path2 { fill: none; stroke: #a2854f; stroke-width: 4; stroke-linecap: round;
+           stroke-dasharray: 2 13; opacity: .8; }
   .water { fill: none; stroke: #86adba; stroke-linecap: round; stroke-linejoin: round; }
 </style>
 
@@ -41,344 +45,414 @@
   <symbol id="bush" viewBox="0 0 46 26">
     <path class="leaf2" d="M4 25 C0 16 7 8 14 11 C16 2 29 1 33 9 C42 8 46 18 41 25 Z"/>
   </symbol>
+  <pattern id="grain" width="46" height="46" patternUnits="userSpaceOnUse">
+    <circle cx="7"  cy="9"  r="1.1" fill="#d9caa3" opacity=".45"/>
+    <circle cx="31" cy="20" r="1.5" fill="#d9caa3" opacity=".35"/>
+    <circle cx="18" cy="37" r="1"   fill="#d9caa3" opacity=".4"/>
+    <circle cx="41" cy="41" r="1.3" fill="#d9caa3" opacity=".3"/>
+  </pattern>
 </defs>
 
-<!-- ══ 종이 바탕 ══ -->
+<!-- ══ 종이 바탕 ══════════════════════════════════════════════════════════ -->
 <rect x="0" y="0" width="900" height="1300" fill="#f5edd8"/>
-<g opacity=".5">
-  <path class="ink2 thin" d="M0 250 C220 238 470 264 900 246" opacity=".09"/>
-  <path class="ink2 thin" d="M0 640 C260 654 520 626 900 648" opacity=".07"/>
-  <path class="ink2 thin" d="M0 1040 C240 1028 560 1054 900 1034" opacity=".07"/>
+<rect x="0" y="0" width="900" height="1300" fill="url(#grain)"/>
+<ellipse cx="70"  cy="80"   rx="90"  ry="60" fill="#e7d9b4" opacity=".35"/>
+<ellipse cx="840" cy="1230" rx="100" ry="66" fill="#e7d9b4" opacity=".3"/>
+<ellipse cx="860" cy="60"   rx="70"  ry="46" fill="#e7d9b4" opacity=".25"/>
+
+<!-- ══ 테두리 ════════════════════════════════════════════════════════════ -->
+<rect x="26" y="26" width="848" height="1248" rx="12" fill="none" stroke="#6f5f47" stroke-width="5"/>
+<rect x="40" y="40" width="820" height="1220" rx="7"  fill="none" stroke="#b09b74" stroke-width="2"/>
+<g fill="#6f5f47" opacity=".8">
+  <circle cx="26" cy="26" r="6"/><circle cx="874" cy="26" r="6"/>
+  <circle cx="26" cy="1274" r="6"/><circle cx="874" cy="1274" r="6"/>
 </g>
 
-<!-- ══ 빈티지 테두리 ══ -->
-<rect x="22" y="22" width="856" height="1256" fill="none" stroke="#b3a075" stroke-width="3.5"/>
-<rect x="34" y="34" width="832" height="1232" fill="none" stroke="#c8b48a" stroke-width="1.3"/>
-<g fill="#b3a075">
-  <path d="M28 28 l16 0 l-16 16 z"/><path d="M872 28 l-16 0 l16 16 z"/>
-  <path d="M28 1272 l16 0 l-16 -16 z"/><path d="M872 1272 l-16 0 l16 -16 z"/>
-</g>
-
-<!-- ══ 법화산 능선 (캠퍼스 배후) ══ -->
+<!-- ══ 제목 리본 ═════════════════════════════════════════════════════════ -->
 <g>
-  <path fill="#dfd3ae" stroke="#a89670" stroke-width="2" stroke-linejoin="round"
-        d="M46 372 C110 316 152 292 206 316 C258 258 306 226 362 258 C410 206 470 190 520 232 C572 186 640 194 686 244 C736 208 800 218 854 268
-           L854 424 C782 408 742 434 668 424 C588 412 540 440 460 428 C378 416 320 442 240 430 C160 418 108 438 46 428 Z"/>
-  <path fill="#cfc39c" stroke="none"
-        d="M206 316 C258 258 306 226 362 258 C336 292 300 330 288 424 C224 430 150 414 46 428 L46 372 C110 316 152 292 206 316 Z" opacity=".55"/>
-  <path fill="#cfc39c" stroke="none"
-        d="M520 232 C572 186 640 194 686 244 C650 282 622 336 612 428 C560 434 508 424 470 428 C486 330 502 274 520 232 Z" opacity=".45"/>
-  <g class="ink2 thin" opacity=".55">
-    <path d="M362 258 C352 292 340 330 334 380"/>
-    <path d="M520 232 C516 274 512 328 512 380"/>
-    <path d="M686 244 C700 288 712 336 716 382"/>
-    <path d="M206 316 C214 342 220 362 222 384"/>
-    <path d="M300 300 l16 22 M330 296 l14 20 M556 262 l16 20 M584 258 l14 18 M726 274 l16 20"/>
-  </g>
-  <text class="t sub" x="612" y="330" style="fill:#8d7c58;stroke:#dfd3ae">법화산</text>
-</g>
-<g opacity=".92">
-  <use href="#tr-pine" x="96" y="336" width="30" height="41"/>
-  <use href="#tr-pine" x="140" y="352" width="26" height="36"/>
-  <use href="#tr-pine" x="256" y="324" width="30" height="41"/>
-  <use href="#tr-pine" x="420" y="304" width="28" height="38"/>
-  <use href="#tr-pine" x="466" y="322" width="24" height="33"/>
-  <use href="#tr-pine" x="768" y="308" width="30" height="41"/>
-  <use href="#tr-pine" x="812" y="330" width="26" height="36"/>
+  <path d="M96 62 L804 62 L826 101 L804 140 L96 140 L74 101 Z" fill="#8c5b34" stroke="#6f5f47" stroke-width="3"/>
+  <path d="M104 70 L796 70 L814 101 L796 132 L104 132 L86 101 Z" fill="none" stroke="#e6c9a4" stroke-width="1.6" opacity=".8"/>
+  <text class="t ttl" x="450" y="105">단국대학교 죽전캠퍼스 현장체험학습</text>
+  <text class="t ttl2" x="450" y="129">TRAVEL LOG · 2026</text>
 </g>
 
-<!-- ══ 캠퍼스 구역 ══ -->
+<!-- ══ 법화산 능선 ═══════════════════════════════════════════════════════ -->
 <g>
-  <path fill="#efe3c4" stroke="none"
-        d="M92 470 C160 404 300 386 452 392 C606 386 748 408 812 472 C846 560 842 700 820 812 C800 902 700 946 452 950 C206 946 104 900 84 812 C62 700 58 556 92 470 Z"/>
-  <path fill="none" stroke="#b8a67f" stroke-width="2.6" stroke-dasharray="12 9" stroke-linejoin="round"
-        d="M92 470 C160 404 300 386 452 392 C606 386 748 408 812 472 C846 560 842 700 820 812 C800 902 700 946 452 950 C206 946 104 900 84 812 C62 700 58 556 92 470 Z"/>
-  <text class="t tiny" x="186" y="530" transform="rotate(-11 186 530)">죽전캠퍼스</text>
-</g>
-
-<!-- 언덕 결 (오르막 표시) -->
-<g class="ink2 thin" opacity=".3">
-  <path d="M150 880 C300 856 600 856 760 880"/>
-  <path d="M164 806 C310 782 590 782 748 806"/>
-  <path d="M180 726 C320 704 580 704 730 726"/>
-  <path d="M198 640 C330 620 566 620 706 640"/>
-  <path d="M220 552 C340 534 550 534 676 552"/>
-</g>
-
-<!-- ══ 대운동장 (캠퍼스 최고지점) ══ -->
-<g>
-  <ellipse cx="735" cy="610" rx="64" ry="38" fill="#e6d9b4" stroke="#a89670" stroke-width="2.2"/>
-  <ellipse cx="735" cy="610" rx="42" ry="22" fill="#9db089" stroke="#5f7550" stroke-width="1.8"/>
-  <text class="t tiny" x="735" y="668">대운동장</text>
-</g>
-
-<!-- ══ 평화의 광장 · 곰상 ══ -->
-<g>
-  <ellipse cx="455" cy="575" rx="62" ry="30" fill="#eadfbd" stroke="#b8a67f" stroke-width="2.2"/>
-  <ellipse cx="455" cy="575" rx="40" ry="18" fill="none" stroke="#c8b48a" stroke-width="1.4" stroke-dasharray="6 6"/>
-  <rect x="443" y="552" width="24" height="12" fill="#d9cba4" stroke="#6f5f47" stroke-width="1.8"/>
-  <g transform="translate(455 534)">
-    <path class="wall" style="fill:#8a6b46" d="M-11 18 C-16 8 -14 -4 -6 -8 C-4 -14 4 -14 6 -8 C14 -4 16 8 11 18 Z"/>
-    <circle cx="-8" cy="-10" r="4.4" fill="#8a6b46" stroke="#6f5f47" stroke-width="1.6"/>
-    <circle cx="8" cy="-10" r="4.4" fill="#8a6b46" stroke="#6f5f47" stroke-width="1.6"/>
-    <circle cx="-3.5" cy="2" r="1.5" fill="#f5edd8"/><circle cx="3.5" cy="2" r="1.5" fill="#f5edd8"/>
+  <path d="M56 300 C120 236 168 214 218 240 C258 190 316 176 360 214
+           C410 168 470 166 512 208 C560 164 626 172 664 216
+           C712 186 776 200 812 246 C834 266 842 284 844 300 Z"
+        fill="#cfc39c" stroke="#6f5f47" stroke-width="2.6" stroke-linejoin="round"/>
+  <g class="ink2 thin" opacity=".75">
+    <path d="M218 240 C246 262 266 280 278 300"/>
+    <path d="M360 214 C384 244 402 272 412 300"/>
+    <path d="M512 208 C536 240 554 270 564 300"/>
+    <path d="M664 216 C688 246 704 274 712 300"/>
   </g>
-  <text class="t tiny" x="455" y="616">평화의 광장 · 곰상</text>
+  <path d="M330 206 L360 214 L390 206" class="ink2 thin"/>
+  <path d="M482 200 L512 208 L542 200" class="ink2 thin"/>
+  <text class="t sub" x="770" y="276">법화산</text>
 </g>
 
-<!-- ══ 공학관군 ══ -->
-<g transform="translate(620 760)">
-  <path class="wall" d="M-62 30 L-62 -14 L-22 -14 L-22 30 Z"/>
-  <path class="roof2" d="M-66 -14 L-42 -34 L-18 -14 Z"/>
-  <path class="wall" d="M-16 30 L-16 -26 L26 -26 L26 30 Z"/>
-  <path class="roof2" d="M-20 -26 L5 -46 L30 -26 Z"/>
-  <path class="wall" d="M32 30 L32 -8 L66 -8 L66 30 Z"/>
-  <path class="roof2" d="M28 -8 L49 -26 L70 -8 Z"/>
-  <g class="ink2 thin">
-    <path d="M-54 -4 l0 12 M-40 -4 l0 12 M-30 -4 l0 12"/>
-    <path d="M-8 -16 l0 12 M4 -16 l0 12 M16 -16 l0 12 M-8 4 l0 12 M4 4 l0 12 M16 4 l0 12"/>
-    <path d="M40 2 l0 12 M54 2 l0 12"/>
-  </g>
-  <text class="t tiny" x="0" y="54">공학관</text>
+<!-- ══ 캠퍼스 지면 ═══════════════════════════════════════════════════════ -->
+<path d="M58 292 L842 292 L842 902 C700 916 560 920 450 920 C340 920 200 916 58 902 Z"
+      fill="#ece0bd" stroke="none"/>
+<g class="ink2 thin" opacity=".5">
+  <path d="M64 400 C220 384 330 392 450 388 C580 384 700 392 836 382"/>
+  <path d="M64 530 C210 514 340 522 450 518 C570 514 700 522 836 512"/>
+  <path d="M64 656 C210 642 330 650 450 646 C580 642 700 650 836 638"/>
+  <path d="M64 782 C210 770 330 778 450 774 C580 770 700 778 836 766"/>
 </g>
-<use href="#bush" x="700" y="770" width="40" height="23"/>
-<use href="#tr-round" x="548" y="742" width="30" height="38"/>
 
-<!-- ══ 인문·상경·사범관 ══ -->
-<g transform="translate(215 838)">
-  <path class="wall" d="M-72 28 L-72 -18 L72 -18 L72 28 Z"/>
-  <path class="roof" d="M-78 -18 L0 -44 L78 -18 Z"/>
-  <g class="ink2 thin">
-    <path d="M-58 -8 l0 14 M-38 -8 l0 14 M-18 -8 l0 14 M2 -8 l0 14 M22 -8 l0 14 M42 -8 l0 14 M60 -8 l0 14"/>
-  </g>
-  <text class="t tiny" x="0" y="52">인문 · 상경 · 사범관</text>
+<!-- 오르막 방향 (나침반은 그리지 않는다 — 방위 미확정, map-reference §1-1) -->
+<g transform="translate(72 480)">
+  <path class="ink med" d="M0 140 L0 8"/>
+  <path class="ink med" d="M-10 22 L0 6 L10 22"/>
+  <text class="t tiny" x="0" y="0" transform="rotate(-90 0 0) translate(-84 5)">언덕 위</text>
 </g>
-<use href="#tr-round" x="120" y="770" width="32" height="40"/>
-<use href="#bush" x="292" y="856" width="42" height="24"/>
+<g transform="translate(828 480)">
+  <path class="ink med" d="M0 140 L0 8"/>
+  <path class="ink med" d="M-10 22 L0 6 L10 22"/>
+  <text class="t tiny" x="0" y="0" transform="rotate(-90 0 0) translate(-84 5)">언덕 위</text>
+</g>
 
-<!-- 캠퍼스 나무 흩뿌리기 -->
+<!-- ══ 캠퍼스 안 동선 ════════════════════════════════════════════════════ -->
+<g class="path">
+  <path d="M432 796 C428 742 406 664 398 622"/>
+  <path d="M418 724 C350 714 282 706 252 702"/>
+  <path d="M450 750 C500 738 538 726 558 720"/>
+  <path d="M370 558 C320 520 252 482 224 470"/>
+  <path d="M404 550 C414 510 428 472 438 460"/>
+  <path d="M424 554 C520 526 640 492 676 480"/>
+  <path d="M470 412 C540 380 604 346 628 336"/>
+</g>
+
+<!-- ══ 장식 (핀이 붙지 않음 — lm- 접두를 쓰지 않는다) ════════════════════ -->
+<g transform="translate(196 336)">
+  <ellipse class="shadow" cx="0" cy="30" rx="66" ry="11"/>
+  <path class="wall" d="M-58 30 L-58 -14 L-6 -14 L-6 30 Z"/>
+  <path class="wall2" d="M-2 30 L-2 -2 L44 -2 L44 30 Z"/>
+  <path class="roof3" d="M-64 -14 L-32 -34 L0 -14 Z"/>
+  <path class="roof3" d="M-6 -2 L21 -18 L48 -2 Z"/>
+  <g class="ink2 thin"><path d="M-46 -2 l0 12 M-30 -2 l0 12 M-16 -2 l0 12 M10 10 l0 10 M28 10 l0 10"/></g>
+  <text class="t tiny" x="0" y="52">기숙사 · 무용관 · 후문</text>
+</g>
+<g transform="translate(676 604)">
+  <ellipse class="shadow" cx="0" cy="24" rx="46" ry="9"/>
+  <path class="wall" d="M-36 24 L-36 -16 L36 -16 L36 24 Z"/>
+  <path class="roof3" d="M-42 -16 L0 -38 L42 -16 Z"/>
+  <g class="ink2 thin"><path d="M-22 -4 l0 12 M0 -4 l0 12 M22 -4 l0 12"/></g>
+  <text class="t tiny" x="0" y="44">법학관</text>
+</g>
+<g transform="translate(716 752)">
+  <ellipse class="shadow" cx="0" cy="26" rx="86" ry="10"/>
+  <path class="wall" d="M-76 26 L-76 -10 L-40 -10 L-40 26 Z"/>
+  <path class="wall2" d="M-38 26 L-38 -18 L-2 -18 L-2 26 Z"/>
+  <path class="wall" d="M0 26 L0 -12 L36 -12 L36 26 Z"/>
+  <path class="wall2" d="M38 26 L38 -20 L74 -20 L74 26 Z"/>
+  <g class="ink2 thin"><path d="M-64 2 l0 10 M-52 2 l0 10 M-26 -4 l0 10 M-14 -4 l0 10 M12 0 l0 10 M24 0 l0 10 M50 -6 l0 10 M62 -6 l0 10"/></g>
+  <text class="t tiny" x="0" y="48">사회과학관 · 공학관</text>
+</g>
+<g transform="translate(166 856)">
+  <ellipse class="shadow" cx="0" cy="24" rx="76" ry="10"/>
+  <path class="wall" d="M-66 24 L-66 -16 L-24 -16 L-24 24 Z"/>
+  <path class="wall2" d="M-22 24 L-22 -22 L20 -22 L20 24 Z"/>
+  <path class="wall" d="M22 24 L22 -14 L64 -14 L64 24 Z"/>
+  <g class="ink2 thin"><path d="M-54 -2 l0 12 M-38 -2 l0 12 M-10 -8 l0 12 M6 -8 l0 12 M34 0 l0 12 M50 0 l0 12"/></g>
+  <text class="t tiny" x="0" y="44">인문 · 상경 · 사범관</text>
+</g>
+<g transform="translate(706 862)">
+  <ellipse class="shadow" cx="0" cy="20" rx="50" ry="9"/>
+  <path class="wall" d="M-40 20 L-40 -14 L4 -14 L4 20 Z"/>
+  <path class="wall2" d="M6 20 L6 -4 L40 -4 L40 20 Z"/>
+  <g class="ink2 thin"><path d="M-28 -2 l0 10 M-12 -2 l0 10 M18 6 l0 8"/></g>
+  <text class="t tiny" x="0" y="40">SW ICT관 · 미디어센터</text>
+</g>
+
+<!-- 나무·수풀 -->
 <g opacity=".95">
-  <use href="#tr-round" x="360" y="486" width="30" height="38"/>
-  <use href="#tr-round" x="556" y="500" width="28" height="35"/>
-  <use href="#tr-pine"  x="646" y="470" width="26" height="36"/>
-  <use href="#tr-round" x="238" y="606" width="30" height="38"/>
-  <use href="#bush"     x="392" y="676" width="44" height="25"/>
-  <use href="#tr-round" x="742" y="708" width="28" height="35"/>
-  <use href="#bush"     x="160" y="700" width="40" height="23"/>
-  <use href="#tr-pine"  x="796" y="640" width="26" height="36"/>
-  <use href="#bush"     x="518" y="880" width="44" height="25"/>
-  <use href="#tr-round" x="640" y="866" width="28" height="35"/>
+  <use href="#tr-pine"  x="116" y="400" width="38" height="52"/>
+  <use href="#tr-round" x="304" y="330" width="40" height="50"/>
+  <use href="#tr-pine"  x="784" y="368" width="38" height="52"/>
+  <use href="#tr-round" x="106" y="596" width="40" height="50"/>
+  <use href="#tr-pine"  x="330" y="688" width="38" height="52"/>
+  <use href="#tr-round" x="800" y="656" width="40" height="50"/>
+  <use href="#tr-pine"  x="76" y="690" width="38" height="52"/>
+  <use href="#tr-round" x="296" y="860" width="40" height="50"/>
+  <use href="#tr-pine"  x="806" y="478" width="38" height="52"/>
+  <use href="#bush" x="268" y="628" width="46" height="26"/>
+  <use href="#bush" x="626" y="654" width="46" height="26"/>
+  <use href="#bush" x="504" y="866" width="46" height="26"/>
+  <use href="#bush" x="176" y="486" width="46" height="26"/>
 </g>
 
-<!-- ══ 캠퍼스 안팎 경계선 ══ -->
-<g>
-  <path class="ink2 med" d="M70 962 C240 950 400 972 560 958 C680 948 780 966 838 958" opacity=".55"
-        stroke-dasharray="16 10"/>
-  <text class="t tiny" x="272" y="992">— 여기서부터 캠퍼스 바깥 · 아래 두 곳은 모두 죽전역 방면 —</text>
-</g>
-
-<!-- ══ 탄천 (위치 자유 · 지리 검증 예외) ══ -->
-<g>
-  <path fill="#bcd7de" stroke="#5f8e9e" stroke-width="2.4" stroke-linejoin="round"
-        d="M62 1262 C104 1210 78 1166 122 1122 C160 1084 116 1046 138 1008 C158 974 122 966 64 962
-           L64 996 C104 1002 122 1010 100 1042 C74 1080 118 1108 82 1148 C46 1190 76 1220 106 1262 Z"/>
-  <g class="water" stroke-width="1.6" opacity=".8">
-    <path d="M78 1226 C90 1216 100 1220 110 1210"/>
-    <path d="M92 1166 C104 1156 114 1160 124 1150"/>
-    <path d="M112 1096 C124 1086 132 1090 142 1080"/>
-    <path d="M104 1022 C116 1014 124 1018 134 1010"/>
+<!-- ══ ① 대운동장 — 캠퍼스에서 가장 높은 곳 ══════════════════════════════ -->
+<g id="lm-field">
+  <g transform="translate(648 325)">
+    <ellipse class="shadow" cx="0" cy="34" rx="76" ry="12"/>
+    <ellipse cx="0" cy="8" rx="70" ry="34" fill="#c8794f" stroke="#6f5f47" stroke-width="2.6"/>
+    <ellipse cx="0" cy="8" rx="54" ry="23" fill="#9db089" stroke="#6f5f47" stroke-width="2.2"/>
+    <path class="ink2 thin" d="M-54 8 L54 8"/>
+    <path class="wall2" style="fill:#f7efd9" d="M-24 -30 L24 -30 L18 -18 L-18 -18 Z"/>
+    <path class="ink2 thin" d="M-12 -30 L-8 -18 M0 -30 L0 -18 M12 -30 L8 -18"/>
+    <path class="ink med" d="M-46 -22 L-46 -44"/>
+    <path class="roof2" d="M-46 -44 L-20 -38 L-46 -32 Z"/>
   </g>
-  <!-- 작은 다리 (탄천 ↔ 보정동 카페거리) -->
-  <g transform="translate(112 1136)">
-    <path class="ink med" d="M-38 6 C-18 -10 18 -10 38 6" />
-    <path class="ink thin" d="M-38 14 C-18 -2 18 -2 38 14"/>
-    <path class="ink thin" d="M-22 2 l0 10 M0 -3 l0 10 M22 2 l0 10"/>
+  <text class="t lbl" x="648" y="397">대운동장</text>
+  <text class="t tiny" x="648" y="419">캠퍼스에서 가장 높은 곳</text>
+</g>
+
+<!-- ══ ② 석주선기념박물관 ════════════════════════════════════════════════ -->
+<g id="lm-museum">
+  <g transform="translate(207 455)">
+    <ellipse class="shadow" cx="0" cy="34" rx="70" ry="12"/>
+    <path class="wall" d="M-52 34 L-52 -10 L52 -10 L52 34 Z"/>
+    <path class="roof2" d="M-62 -10 L0 -46 L62 -10 Z"/>
+    <path class="ink2 med" d="M-62 -10 L62 -10"/>
+    <g class="ink2 med"><path d="M-38 34 L-38 -6 M-19 34 L-19 -6 M0 34 L0 -6 M19 34 L19 -6 M38 34 L38 -6"/></g>
+    <path class="ink thin" d="M-54 34 L54 34"/>
+    <path class="wall2" style="fill:#dfd0a8" d="M-16 -20 L16 -20 L16 -12 L-16 -12 Z"/>
+    <g transform="translate(-72 22)">
+      <path class="wall2" style="stroke-width:1.8" d="M-11 12 L-11 6 L11 6 L11 12 Z"/>
+      <path class="wall2" style="fill:#ddd0ab;stroke-width:1.8" d="M-8 6 C-8 -6 8 -6 8 6 Z"/>
+      <circle cx="0" cy="-8" r="6" fill="#ddd0ab" stroke="#6f5f47" stroke-width="1.8"/>
+    </g>
   </g>
+  <text class="t lbl" x="207" y="533">석주선기념박물관</text>
+  <text class="t tiny" x="207" y="555">고고미술 · 민속복식</text>
 </g>
 
-<!-- ══ 바깥 구역 나무 ══ -->
-<g opacity=".9">
-  <use href="#tr-round" x="188" y="1044" width="28" height="35"/>
-  <use href="#bush"     x="222" y="1196" width="42" height="24"/>
-  <use href="#tr-round" x="800" y="1140" width="28" height="35"/>
-  <use href="#bush"     x="560" y="1006" width="40" height="23"/>
-  <use href="#tr-pine"  x="748" y="990" width="24" height="33"/>
-</g>
-
-<!-- ══ 점선 길 (동선) ══ -->
-<g>
-  <!-- 보정동 카페거리 → 정문 -->
-  <path class="path" d="M297 1090 C330 1040 372 1000 418 962 C434 948 444 930 450 912"/>
-  <!-- 정문 → 포은아트홀 -->
-  <path class="path" d="M470 926 C532 962 600 1004 660 1046"/>
-  <!-- 정문 → 도서관 -->
-  <path class="path" d="M436 884 C398 840 352 792 324 730"/>
-  <!-- 도서관 → 평화의 광장 -->
-  <path class="path" d="M336 672 C372 634 410 604 442 588"/>
-  <!-- 평화의 광장 → 박물관 -->
-  <path class="path" d="M492 560 C528 528 566 494 594 468"/>
-  <!-- 2km 압축 고지 -->
-  <g transform="translate(495 1032)">
-    <rect x="-98" y="-17" width="196" height="34" rx="17" fill="#f5edd8" stroke="#c8b48a" stroke-width="1.4" opacity=".97"/>
-    <text class="t tiny" x="0" y="6" style="stroke-width:0">죽전역 방면 · 약 2km</text>
+<!-- ══ ③ 난파기념음악관 ══════════════════════════════════════════════════ -->
+<g id="lm-nanpa">
+  <g transform="translate(441 442)">
+    <ellipse class="shadow" cx="0" cy="32" rx="62" ry="11"/>
+    <path class="wall" d="M-46 32 L-46 -14 L46 -14 L46 32 Z"/>
+    <path class="roof" d="M-54 -14 L0 -44 L54 -14 Z"/>
+    <path class="ink2 med" d="M-54 -14 L54 -14"/>
+    <path class="wall2" style="fill:#f7efd9" d="M-13 32 L-13 4 L13 4 L13 32 Z"/>
+    <path class="ink2 thin" d="M0 8 L0 32"/>
+    <g transform="translate(0 -2)">
+      <rect x="-34" y="0" width="68" height="14" rx="2" fill="#f7efd9" stroke="#6f5f47" stroke-width="1.8"/>
+      <g class="ink2 thin"><path d="M-24 0 l0 14 M-14 0 l0 14 M-4 0 l0 14 M6 0 l0 14 M16 0 l0 14 M26 0 l0 14"/></g>
+      <g fill="#6f5f47"><rect x="-27" y="0" width="5" height="8"/><rect x="-9" y="0" width="5" height="8"/><rect x="11" y="0" width="5" height="8"/></g>
+    </g>
+    <g transform="translate(60 -34)">
+      <circle cx="-6" cy="8" r="5" fill="#6f5f47"/>
+      <path class="ink med" d="M-1 8 L-1 -12 L12 -16"/>
+      <circle cx="14" cy="0" r="4.4" fill="#6f5f47"/>
+      <path class="ink thin" d="M18 0 L18 -16"/>
+    </g>
   </g>
+  <text class="t lbl" x="441" y="517">난파기념음악관</text>
+  <text class="t tiny" x="441" y="539">난파 전시실 · 화~목</text>
 </g>
 
-<!-- ══════════ 랜드마크 6곳 ══════════ -->
+<!-- ══ ④ 단국역사관 ══════════════════════════════════════════════════════ -->
+<g id="lm-history">
+  <g transform="translate(693 468)">
+    <ellipse class="shadow" cx="0" cy="30" rx="58" ry="11"/>
+    <path class="wall" d="M-44 30 L-44 -12 L44 -12 L44 30 Z"/>
+    <path class="roof3" d="M-52 -12 L0 -40 L52 -12 Z"/>
+    <path class="ink2 med" d="M-52 -12 L52 -12"/>
+    <g class="ink2 thin"><path d="M-30 0 l0 14 M-10 0 l0 14 M10 0 l0 14 M30 0 l0 14"/></g>
+    <path class="wall2" style="fill:#f7efd9" d="M-11 30 L-11 8 L11 8 L11 30 Z"/>
+    <g transform="translate(0 -24)">
+      <path class="wall2" style="fill:#f7efd9;stroke-width:1.8" d="M-18 -5 L18 -5 L18 6 L-18 6 Z"/>
+      <circle cx="-18" cy="0.5" r="5" fill="#e0d1a9" stroke="#6f5f47" stroke-width="1.8"/>
+      <circle cx="18" cy="0.5" r="5" fill="#e0d1a9" stroke="#6f5f47" stroke-width="1.8"/>
+    </g>
+  </g>
+  <text class="t lbl" x="693" y="539">단국역사관</text>
+</g>
 
-<!-- ① 정문 (상징탑) — x 0.50, y 0.70 → (450, 910) -->
+<!-- ══ ⑤ 평화의 광장 · 곰상 ══════════════════════════════════════════════ -->
+<g id="lm-plaza">
+  <g transform="translate(396 585)">
+    <ellipse cx="0" cy="14" rx="86" ry="33" fill="#e3d3a8" stroke="#6f5f47" stroke-width="2.4"/>
+    <ellipse cx="0" cy="14" rx="64" ry="23" fill="none" stroke="#c9b587" stroke-width="1.8"/>
+    <g class="ink2 thin" opacity=".8">
+      <path d="M-86 14 L-64 14 M64 14 L86 14 M0 -19 L0 -9 M0 37 L0 47"/>
+    </g>
+    <g transform="translate(0 -6)">
+      <path class="wall2" style="fill:#ddd0ab" d="M-22 20 L-22 10 L22 10 L22 20 Z"/>
+      <path class="ink2 thin" d="M-22 15 L22 15"/>
+      <g transform="translate(0 -2)">
+        <path d="M-16 10 C-20 -6 -12 -18 0 -18 C12 -18 20 -6 16 10 Z" fill="#b98f5e" stroke="#6f5f47" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle cx="0" cy="-26" r="11" fill="#b98f5e" stroke="#6f5f47" stroke-width="2.2"/>
+        <circle cx="-9" cy="-34" r="4.4" fill="#b98f5e" stroke="#6f5f47" stroke-width="1.8"/>
+        <circle cx="9" cy="-34" r="4.4" fill="#b98f5e" stroke="#6f5f47" stroke-width="1.8"/>
+        <circle cx="-4" cy="-27" r="1.6" fill="#5d4d38"/>
+        <circle cx="4" cy="-27" r="1.6" fill="#5d4d38"/>
+        <ellipse cx="0" cy="-21" rx="3.4" ry="2.4" fill="#5d4d38"/>
+      </g>
+    </g>
+  </g>
+  <text class="t lbl" x="396" y="666">평화의 광장 · 곰상</text>
+  <text class="t tiny" x="396" y="688">셔틀버스가 서는 곳</text>
+</g>
+
+<!-- ══ ⑥ 퇴계기념중앙도서관 ══════════════════════════════════════════════ -->
+<g id="lm-library">
+  <g transform="translate(234 702)">
+    <ellipse class="shadow" cx="0" cy="34" rx="68" ry="12"/>
+    <path class="wall" d="M-54 34 L-54 -20 L54 -20 L54 34 Z"/>
+    <path class="roof" d="M-62 -20 L0 -50 L62 -20 Z"/>
+    <path class="ink2 med" d="M-62 -20 L62 -20"/>
+    <g class="ink2 thin"><path d="M-40 -8 l0 20 M-20 -8 l0 20 M20 -8 l0 20 M40 -8 l0 20"/></g>
+    <path class="wall2" style="fill:#f7efd9" d="M-13 34 L-13 0 L13 0 L13 34 Z"/>
+    <path class="ink2 thin" d="M0 4 L0 34"/>
+    <g transform="translate(0 -38)">
+      <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M-20 0 L-2 -5 L-2 8 L-20 13 Z"/>
+      <path class="wall2" style="fill:#e0d1a9;stroke-width:1.8" d="M20 0 L2 -5 L2 8 L20 13 Z"/>
+      <path class="ink thin" d="M0 -5 L0 8"/>
+    </g>
+  </g>
+  <text class="t lbl" x="234" y="781">퇴계기념중앙도서관</text>
+  <text class="t tiny" x="234" y="803">여기부터 경사가 급해집니다</text>
+</g>
+
+<!-- ══ ⑦ 들샘길 — 공대와 도서관 사이의 인공 개천 ═════════════════════════ -->
+<g id="lm-deulsaem">
+  <g transform="translate(576 715)">
+    <path class="water" style="stroke-width:11;opacity:.85" d="M6 -72 C-6 -46 12 -18 -2 10 C-12 32 4 52 0 72"/>
+    <path class="water" style="stroke-width:4;opacity:.6;stroke:#b7d3dc" d="M4 -64 C-6 -42 10 -16 -3 8 C-12 28 2 48 -1 64"/>
+    <g class="ink2 thin" opacity=".85">
+      <path d="M-24 -48 L24 -44 M-26 -18 L22 -14 M-24 12 L24 16 M-26 42 L22 46"/>
+    </g>
+    <path class="roof2" style="stroke-width:2" d="M-22 -4 L22 -2 L22 6 L-22 4 Z"/>
+    <path class="ink thin" d="M-18 -3 L-18 -12 M18 -1 L18 -10"/>
+    <use href="#bush" x="14" y="-86" width="46" height="26"/>
+  </g>
+  <text class="t lbl" x="576" y="812">들샘길</text>
+  <text class="t tiny" x="576" y="834">용이 내려가는 물길</text>
+</g>
+
+<!-- ══ ⑧ 정문 · 상징탑 ═══════════════════════════════════════════════════ -->
 <g id="lm-gate">
-  <g transform="translate(450 910)">
-    <ellipse cx="0" cy="30" rx="62" ry="12" fill="#e2d5b0" opacity=".7"/>
+  <g transform="translate(432 832)">
+    <ellipse class="shadow" cx="0" cy="30" rx="66" ry="12"/>
     <path class="wall" d="M-52 30 L-52 -6 L-38 -6 L-38 30 Z"/>
-    <path class="wall" d="M38 30 L38 -6 L52 30 Z" style="fill:#f3e8cd"/>
     <path class="wall" d="M38 30 L38 -6 L52 -6 L52 30 Z"/>
     <path class="roof" d="M-60 -6 L-45 -20 L-30 -6 Z"/>
     <path class="roof" d="M30 -6 L45 -20 L60 -6 Z"/>
     <path class="ink med" d="M-38 -2 C-16 -18 16 -18 38 -2"/>
-    <!-- 상징탑 -->
-    <path class="wall" style="fill:#e9dbb6" d="M-9 -14 L-5 -50 L5 -50 L9 -14 Z"/>
-    <path class="roof2" d="M-11 -50 L0 -66 L11 -50 Z"/>
-    <circle cx="0" cy="-70" r="5" fill="#c9a24a" stroke="#6f5f47" stroke-width="1.8"/>
-    <path class="ink2 thin" d="M-6 -40 L6 -40 M-7 -30 L7 -30 M-8 -22 L8 -22"/>
+    <path class="wall2" d="M-9 -14 L-5 -52 L5 -52 L9 -14 Z"/>
+    <path class="roof2" d="M-11 -52 L0 -68 L11 -52 Z"/>
+    <circle cx="0" cy="-73" r="5" fill="#c9a24a" stroke="#6f5f47" stroke-width="1.8"/>
+    <path class="ink2 thin" d="M-7 -30 L7 -30 M-8 -40 L8 -40"/>
   </g>
-  <text class="t lbl" x="450" y="982">정문</text>
+  <text class="t lbl" x="432" y="900">정문 · 상징탑</text>
 </g>
 
-<!-- ② 중앙도서관 — x 0.35, y 0.54 → (315, 702) -->
-<g id="lm-library">
-  <g transform="translate(315 702)">
-    <ellipse cx="0" cy="34" rx="66" ry="12" fill="#e2d5b0" opacity=".7"/>
-    <path class="wall" d="M-54 34 L-54 -20 L54 -20 L54 34 Z"/>
-    <path class="roof" d="M-62 -20 L0 -50 L62 -20 Z"/>
-    <path class="ink2 med" d="M-62 -20 L62 -20"/>
-    <g class="ink2 thin">
-      <path d="M-40 -8 l0 20 M-20 -8 l0 20 M20 -8 l0 20 M40 -8 l0 20"/>
-    </g>
-    <path class="wall" style="fill:#f7efd9" d="M-13 34 L-13 0 L13 0 L13 34 Z"/>
-    <path class="ink2 thin" d="M0 4 L0 34"/>
-    <!-- 지붕 위 책 -->
-    <g transform="translate(0 -38)">
-      <path class="wall" style="fill:#c05f3c;stroke-width:1.8" d="M-16 6 L-16 0 L0 -4 L0 4 Z"/>
-      <path class="wall" style="fill:#9c452a;stroke-width:1.8" d="M16 6 L16 0 L0 -4 L0 4 Z"/>
-    </g>
-  </g>
-  <text class="t lbl" x="315" y="778">중앙도서관</text>
-</g>
-
-<!-- ③ 단국대 박물관 — x 0.67, y 0.34 → (603, 442) -->
-<g id="lm-museum">
-  <g transform="translate(603 442)">
-    <ellipse cx="0" cy="34" rx="66" ry="12" fill="#e2d5b0" opacity=".7"/>
-    <path class="wall" d="M-50 34 L-50 -10 L50 -10 L50 34 Z"/>
-    <path class="roof2" d="M-60 -10 L0 -44 L60 -10 Z"/>
-    <path class="ink2 med" d="M-60 -10 L60 -10"/>
-    <g class="ink2 med">
-      <path d="M-36 34 L-36 -6 M-18 34 L-18 -6 M0 34 L0 -6 M18 34 L18 -6 M36 34 L36 -6"/>
-    </g>
-    <path class="ink thin" d="M-52 34 L52 34"/>
-    <!-- 석사자상 -->
-    <g transform="translate(-70 22)">
-      <path class="wall" style="fill:#ddd0ab;stroke-width:1.8" d="M-11 12 L-11 6 L11 6 L11 12 Z"/>
-      <path class="wall" style="fill:#e6dabb;stroke-width:1.8" d="M-8 6 C-10 -2 -6 -8 0 -8 C6 -8 10 -2 8 6 Z"/>
-      <circle cx="-3" cy="-2" r="1.3" fill="#6f5f47"/><circle cx="3" cy="-2" r="1.3" fill="#6f5f47"/>
-    </g>
-    <text class="t tiny" x="0" y="-52" style="font-size:13px">MUSEUM</text>
-  </g>
-  <text class="t lbl" x="603" y="522">단국대 박물관</text>
-</g>
-
-<!-- ④ 죽전 포은아트홀 — x 0.76, y 0.83 → (684, 1079) -->
-<g id="lm-artshall">
-  <g transform="translate(684 1079)">
-    <ellipse cx="0" cy="34" rx="62" ry="12" fill="#e2d5b0" opacity=".7"/>
-    <path class="wall" d="M-46 34 L-46 -12 L46 -12 L46 34 Z"/>
-    <path class="roof2" d="M-52 -12 C-40 -46 40 -46 52 -12 Z"/>
-    <!-- 무대 아치와 커튼 -->
-    <path class="wall" style="fill:#f7efd9" d="M-26 34 L-26 4 C-26 -12 26 -12 26 4 L26 34 Z"/>
-    <path class="wall" style="fill:#c05f3c;stroke-width:1.8" d="M-26 34 L-26 4 C-24 -8 -12 -10 -10 2 L-12 34 Z"/>
-    <path class="wall" style="fill:#c05f3c;stroke-width:1.8" d="M26 34 L26 4 C24 -8 12 -10 10 2 L12 34 Z"/>
-    <g class="ink2 thin"><path d="M-40 12 l0 12 M40 12 l0 12"/></g>
-    <!-- 음표 -->
-    <g transform="translate(0 -32)">
-      <circle cx="-7" cy="6" r="5" fill="#6f5f47"/>
-      <path class="ink med" d="M-2 6 L-2 -12 C4 -10 9 -7 10 -2"/>
-    </g>
-  </g>
-  <text class="t lbl" x="684" y="1156">죽전 포은아트홀</text>
-  <text class="t tiny" x="684" y="1182">죽전역 방면 · 역 바로 옆 (도보 5분)</text>
-</g>
-
-<!-- ⑤ 보정동 카페거리 입구 — x 0.33, y 0.86 → (297, 1118) -->
-<g id="lm-bojeong">
-  <g transform="translate(297 1118)">
-    <ellipse cx="0" cy="34" rx="60" ry="12" fill="#e2d5b0" opacity=".7"/>
-    <path class="wall" d="M-44 34 L-44 -6 L44 -6 L44 34 Z"/>
-    <!-- 줄무늬 차양 -->
-    <path class="roof" style="fill:#c05f3c" d="M-52 -6 L-42 -26 L42 -26 L52 -6 Z"/>
-    <g fill="#f3e8cd">
-      <path d="M-33 -6 L-27 -26 L-15 -26 L-21 -6 Z"/>
-      <path d="M-9 -6 L-3 -26 L9 -26 L3 -6 Z"/>
-      <path d="M15 -6 L21 -26 L33 -26 L27 -6 Z"/>
-    </g>
-    <path class="ink2 med" d="M-52 -6 L52 -6"/>
-    <path class="wall" style="fill:#f7efd9" d="M-30 34 L-30 8 L-6 8 L-6 34 Z"/>
-    <path class="ink2 thin" d="M-30 20 L-6 20"/>
-    <!-- 커피잔 간판 -->
-    <g transform="translate(20 18)">
-      <path class="wall" style="fill:#f7efd9;stroke-width:1.8" d="M-11 -6 L11 -6 L8 12 L-8 12 Z"/>
-      <path class="ink thin" d="M11 -2 C18 -2 18 6 11 6"/>
-      <path class="ink2 thin" d="M-4 -12 C-1 -16 -1 -19 -4 -22 M4 -12 C7 -16 7 -19 4 -22"/>
-    </g>
-    <!-- 거리 입구 표지 -->
-    <g transform="translate(-62 6)">
-      <path class="ink med" d="M0 28 L0 -14"/>
-      <path class="wall" style="fill:#e9dbb6;stroke-width:1.8" d="M-2 -14 L26 -14 L26 -2 L-2 -2 Z"/>
-    </g>
-  </g>
-  <text class="t lbl" x="297" y="1196">보정동 카페거리 입구</text>
-  <text class="t tiny" x="297" y="1222">죽전역 방면 · 탄천변 (역에서 도보권)</text>
-</g>
-
-<!-- ⑥ 탄천 — x 0.14, y 0.78 → (126, 1014) · 위치 자유(지리 검증 예외) -->
-<g id="lm-tancheon">
-  <g transform="translate(126 1014)">
-    <path fill="#bcd7de" stroke="#5f8e9e" stroke-width="2.2" stroke-linejoin="round"
-          d="M-40 -14 C-24 -24 -8 -4 8 -14 C24 -24 34 -8 42 -14 L42 12 C34 18 24 4 8 12 C-8 20 -24 2 -40 12 Z"/>
-    <g class="water" stroke-width="2">
-      <path d="M-30 -2 C-18 -10 -6 4 6 -4"/>
-      <path d="M12 2 C22 -4 30 4 36 0"/>
-    </g>
-    <!-- 갈대 -->
-    <g class="ink2 med" transform="translate(-44 16)">
-      <path d="M0 14 C-2 2 -4 -6 -2 -14"/>
-      <path d="M8 14 C8 4 8 -2 10 -10"/>
-      <path class="leaf2" style="stroke-width:1.4" d="M-2 -14 C-7 -18 -7 -24 -2 -26 C3 -24 3 -18 -2 -14 Z"/>
-      <path class="leaf2" style="stroke-width:1.4" d="M10 -10 C5 -14 5 -20 10 -22 C15 -20 15 -14 10 -10 Z"/>
-    </g>
-  </g>
-  <text class="t lbl" x="126" y="1064">탄천</text>
-</g>
-
-<!-- ══ 리본형 제목판 ══ -->
+<!-- ══ 캠퍼스 경계 ═══════════════════════════════════════════════════════ -->
 <g>
-  <path fill="#9c452a" d="M62 118 L112 90 L112 168 L62 148 Z"/>
-  <path fill="#9c452a" d="M838 118 L788 90 L788 168 L838 148 Z"/>
-  <path fill="#c05f3c" stroke="#8f3f26" stroke-width="2.4" stroke-linejoin="round"
-        d="M100 74 L800 74 C812 74 818 82 816 92 L810 152 C808 164 800 170 790 170 L110 170 C100 170 92 164 90 152 L84 92 C82 82 88 74 100 74 Z"/>
-  <path fill="none" stroke="#e6a888" stroke-width="1.6" opacity=".8"
-        d="M104 84 L796 84 M100 160 L800 160"/>
-  <text class="t ttl" x="450" y="128">단국대학교 죽전캠퍼스 현장체험학습</text>
-  <text class="t ttl2" x="450" y="155">TRAVEL LOG · 2026</text>
+  <path d="M58 936 C220 926 340 932 450 932 C560 932 700 926 842 936"
+        fill="none" stroke="#8c7a58" stroke-width="2.6" stroke-dasharray="14 10" opacity=".9"/>
+  <rect x="86" y="916" width="228" height="30" rx="15" fill="#f5edd8" stroke="#8c7a58" stroke-width="2"/>
+  <text class="t sub" x="200" y="937">여기부터 캠퍼스 밖</text>
 </g>
 
-<!-- ══ 하단 방향 안내 (나침반 대신) ══ -->
-<g transform="translate(792 1226)">
-  <circle cx="0" cy="0" r="34" fill="#f5edd8" stroke="#b3a075" stroke-width="2"/>
-  <path class="ink med" d="M0 22 L0 -18"/>
-  <path fill="#c05f3c" stroke="#8f3f26" stroke-width="1.6" d="M0 -26 L8 -12 L-8 -12 Z"/>
-  <text class="t tiny" x="0" y="16" style="font-size:11px;stroke-width:0">언덕 위</text>
+<!-- ══ 캠퍼스 바깥 — 죽전역 방면 ════════════════════════════════════════ -->
+<path d="M58 950 L842 950 L842 1216 L58 1216 Z" fill="#efe6ce" stroke="none"/>
+
+<!-- 탄천 -->
+<g>
+  <path class="water" style="stroke-width:26;opacity:.55" d="M58 968 C104 1026 84 1080 128 1130 C156 1164 172 1192 180 1216"/>
+  <path class="water" style="stroke-width:10;opacity:.5;stroke:#b7d3dc" d="M62 976 C106 1032 88 1082 132 1132 C158 1164 174 1192 182 1214"/>
+  <g class="water thin" style="opacity:.7">
+    <path d="M76 1012 C88 1018 98 1016 108 1010"/>
+    <path d="M94 1066 C106 1072 116 1070 126 1064"/>
+    <path d="M124 1120 C136 1126 146 1124 156 1118"/>
+  </g>
+  <g class="ink2 thin" opacity=".8">
+    <path d="M150 1052 C146 1040 148 1030 154 1022"/>
+    <path d="M160 1056 C158 1044 162 1032 168 1026"/>
+  </g>
 </g>
-<text class="t tiny" x="450" y="1252" style="font-size:13px">이 지도는 방위 지도가 아니라 오르막 동선 모식도입니다 · 축척 일정하지 않음</text>
-<text class="t tiny" x="450" y="1272" style="font-size:13px">아래 두 곳은 좌우가 갈라져 있어도 방향이 다르지 않습니다 — 둘 다 죽전역 쪽입니다</text>
+<g id="lm-tancheon">
+  <text class="t lbl" x="90" y="1040" transform="rotate(-62 90 1040)">탄천</text>
+</g>
+
+<!-- 정문 → 죽전역 (2km 압축 구간) -->
+<g>
+  <path class="path" d="M432 872 C436 916 442 960 448 984"/>
+  <rect x="532" y="954" width="288" height="30" rx="15" fill="#f5edd8" stroke="#b09b74" stroke-width="1.6"/>
+  <text class="t tiny" x="676" y="975">약 2km · 셔틀 10분 · 도보 30분</text>
+</g>
+
+<!-- 죽전역에서 갈라지는 두 갈래 -->
+<g class="path2">
+  <path d="M412 1026 C342 1056 278 1088 252 1106"/>
+  <path d="M490 1024 C562 1046 634 1068 660 1078"/>
+</g>
+<text class="t tiny" x="318" y="1054">도보 약 8분</text>
+<text class="t tiny" x="596" y="1042">도보 5분 · 345m</text>
+
+<!-- ══ ⑨ 죽전역 — 캠퍼스 밖 두 곳의 갈림 지점 ════════════════════════════ -->
+<g id="lm-station">
+  <g transform="translate(450 1008)">
+    <ellipse class="shadow" cx="0" cy="26" rx="66" ry="11"/>
+    <path class="wall" d="M-54 26 L-54 -10 L54 -10 L54 26 Z"/>
+    <path class="roof2" d="M-62 -10 L-40 -30 L40 -30 L62 -10 Z"/>
+    <path class="ink2 med" d="M-62 -10 L62 -10"/>
+    <g transform="translate(0 6)">
+      <rect x="-34" y="-8" width="68" height="22" rx="7" fill="#f7efd9" stroke="#6f5f47" stroke-width="2.2"/>
+      <rect x="-26" y="-3" width="16" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
+      <rect x="-5" y="-3" width="10" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
+      <rect x="10" y="-3" width="16" height="11" rx="2" fill="#bcd6de" stroke="#6f5f47" stroke-width="1.6"/>
+      <circle cx="-20" cy="16" r="4" fill="#6f5f47"/>
+      <circle cx="20" cy="16" r="4" fill="#6f5f47"/>
+    </g>
+    <path class="ink2 thin" d="M-46 -20 L-46 -14 M46 -20 L46 -14"/>
+  </g>
+  <text class="t lbl" x="450" y="1074">죽전역</text>
+  <text class="t tiny" x="450" y="1096">캠퍼스 밖 두 곳은 여기서 갑니다</text>
+</g>
+
+<!-- ══ ⑩ 용인포은아트홀 ══════════════════════════════════════════════════ -->
+<g id="lm-artshall">
+  <g transform="translate(684 1098)">
+    <ellipse class="shadow" cx="0" cy="32" rx="60" ry="11"/>
+    <path class="wall" d="M-46 32 L-46 -12 L46 -12 L46 32 Z"/>
+    <path class="roof2" d="M-52 -12 C-40 -48 40 -48 52 -12 Z"/>
+    <path class="wall2" style="fill:#f7efd9" d="M-26 32 L-26 4 C-26 -13 26 -13 26 4 L26 32 Z"/>
+    <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M-26 32 L-26 4 C-24 -9 -12 -11 -10 2 L-12 32 Z"/>
+    <path class="wall2" style="fill:#c05f3c;stroke-width:1.8" d="M26 32 L26 4 C24 -9 12 -11 10 2 L12 32 Z"/>
+    <g class="ink2 thin"><path d="M-40 12 l0 12 M40 12 l0 12"/></g>
+    <g transform="translate(0 -30)">
+      <circle cx="-7" cy="6" r="5" fill="#6f5f47"/>
+      <path class="ink med" d="M-2 6 L-2 -10 L10 -14"/>
+      <circle cx="12" cy="-1" r="4.2" fill="#6f5f47"/>
+    </g>
+  </g>
+  <text class="t lbl" x="684" y="1168">용인포은아트홀</text>
+  <text class="t tiny" x="684" y="1190">죽전역 방면 · 캠퍼스 밖</text>
+</g>
+
+<!-- ══ ⑪ 보정동 카페거리 ═════════════════════════════════════════════════ -->
+<g id="lm-bojeong">
+  <g transform="translate(234 1128)">
+    <ellipse class="shadow" cx="0" cy="30" rx="66" ry="11"/>
+    <path class="wall" d="M-52 30 L-52 -6 L-6 -6 L-6 30 Z"/>
+    <path class="wall2" d="M-2 30 L-2 -14 L46 -14 L46 30 Z"/>
+    <path class="roof3" d="M-56 -6 L-29 -22 L-2 -6 Z"/>
+    <path class="roof3" d="M-6 -14 L22 -30 L50 -14 Z"/>
+    <path d="M-54 6 L-4 6 L-8 18 L-50 18 Z" fill="#c05f3c" stroke="#6f5f47" stroke-width="2"/>
+    <g stroke="#f7efd9" stroke-width="3" opacity=".85"><path d="M-44 6 L-46 18 M-32 6 L-34 18 M-20 6 L-22 18"/></g>
+    <path class="wall2" style="fill:#f7efd9" d="M6 30 L6 6 L26 6 L26 30 Z"/>
+    <g transform="translate(22 -44)">
+      <path class="wall2" style="fill:#f7efd9;stroke-width:2" d="M-13 -6 L13 -6 L10 12 L-10 12 Z"/>
+      <path class="ink med" d="M13 -2 C22 -2 22 8 13 8"/>
+      <path class="wall2" style="fill:#e0d1a9;stroke-width:1.8" d="M-16 12 L16 12 L16 16 L-16 16 Z"/>
+      <g class="ink2 thin"><path d="M-6 -14 C-9 -20 -3 -22 -6 -28 M6 -14 C3 -20 9 -22 6 -28"/></g>
+    </g>
+  </g>
+  <text class="t lbl" x="234" y="1194">보정동 카페거리</text>
+</g>
+
+<!-- ══ 하단 캡션 ═════════════════════════════════════════════════════════ -->
+<g>
+  <path d="M70 1216 L830 1216" stroke="#b09b74" stroke-width="1.6"/>
+  <text class="t tiny" x="450" y="1234">방위 지도가 아니라 오르막 동선 그림입니다 · 위로 갈수록 언덕 위, 좌우는 겹침을 피한 배치입니다</text>
+  <text class="t tiny" x="450" y="1252">캠퍼스 밖 두 곳은 좌우로 갈라져 있어도 둘 다 죽전역에서 갑니다</text>
+</g>
 </svg>

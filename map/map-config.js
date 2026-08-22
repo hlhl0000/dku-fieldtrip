@@ -20,20 +20,33 @@ export const MAP_VIEWBOX = '0 0 ' + MAP_WIDTH + ' ' + MAP_HEIGHT;
 // 좌표 표기 방식 (추정 2). 저장·전달은 전부 0~1 분수다.
 export const COORDINATE_SYSTEM = 'fraction-0-1';
 
-// ── 랜드마크 6곳 (확정 4) ──────────────────────────────────────────────────
+// ── 랜드마크 12곳 (확정 4 · v2에서 6곳 → 12곳) ─────────────────────────────
 // x·y 는 0~1 분수. campus-map.svg 안 같은 id의 그림 중심과 일치한다.
 // 배치 근거·출처는 map-reference.md §3.
 // geoVerified:false = 사용자가 「위치 상관 없음」이라 한 항목 = 지리 검증 예외.
+//
+// 세로축이 곧 오르막이다 — y가 작을수록 언덕 위다(§1-1 동선 모식도). 가로축에는
+// 의미가 없다. 캠퍼스 밖 두 곳(lm-artshall · lm-bojeong)은 좌우로 갈라져 있지만
+// **둘 다 lm-station(죽전역)에서 간다** — 그 관계를 지도에서 죽전역을 갈림 지점으로
+// 삼아 표현했다(v1의 좌우 오독 위험을 구조로 해소).
 export const LANDMARKS = [
-  { id: 'lm-gate',     name: '정문',                x: 0.50, y: 0.70, geoVerified: true  },
-  { id: 'lm-library',  name: '중앙도서관',          x: 0.35, y: 0.54, geoVerified: true  },
-  { id: 'lm-museum',   name: '단국대 박물관',       x: 0.67, y: 0.34, geoVerified: true  },
-  { id: 'lm-artshall', name: '죽전 포은아트홀',     x: 0.76, y: 0.83, geoVerified: true  },
-  { id: 'lm-bojeong',  name: '보정동 카페거리 입구', x: 0.33, y: 0.86, geoVerified: true  },
-  { id: 'lm-tancheon', name: '탄천',                x: 0.14, y: 0.78, geoVerified: false }
+  // 캠퍼스 안 — 언덕 위에서 정문 쪽으로 내려오는 순서
+  { id: 'lm-field',    name: '대운동장',            x: 0.72, y: 0.25, geoVerified: true  },
+  { id: 'lm-museum',   name: '석주선기념박물관',    x: 0.23, y: 0.35, geoVerified: true  },
+  { id: 'lm-nanpa',    name: '난파기념음악관',      x: 0.49, y: 0.34, geoVerified: true  },
+  { id: 'lm-history',  name: '단국역사관',          x: 0.77, y: 0.36, geoVerified: true  },
+  { id: 'lm-plaza',    name: '평화의 광장 · 곰상',  x: 0.44, y: 0.45, geoVerified: true  },
+  { id: 'lm-library',  name: '퇴계기념중앙도서관',  x: 0.26, y: 0.54, geoVerified: true  },
+  { id: 'lm-deulsaem', name: '들샘길',              x: 0.64, y: 0.55, geoVerified: true  },
+  { id: 'lm-gate',     name: '정문 · 상징탑',       x: 0.48, y: 0.64, geoVerified: true  },
+  // 캠퍼스 밖 — 죽전역에서 갈라져 간다
+  { id: 'lm-station',  name: '죽전역',              x: 0.5, y: 0.775, geoVerified: true  },
+  { id: 'lm-artshall', name: '용인포은아트홀',      x: 0.76, y: 0.845, geoVerified: true  },
+  { id: 'lm-bojeong',  name: '보정동 카페거리',     x: 0.26, y: 0.868, geoVerified: true  },
+  { id: 'lm-tancheon', name: '탄천',                x: 0.1, y: 0.8, geoVerified: false }
 ];
 
-// SVG 안 랜드마크 그룹 id 규칙(§6 「id="lm-" 6건」 검사와 같은 접두).
+// SVG 안 랜드마크 그룹 id 규칙(§6 파생 메타 일치 검사와 같은 접두).
 export const LANDMARK_ID_PREFIX = 'lm-';
 
 // ── 오버레이 표시 치수 (전부 viewBox 단위) ─────────────────────────────────

@@ -1,8 +1,9 @@
 {
   "package": "지도 자산 패키지",
-  "version": "1",
+  "version": "2",
   "createdAt": "2026-08-21",
-  "spec": "설계지시안_단국대네컷_v3.4.md §2 · §3 단계 1",
+  "updatedAt": "2026-08-22",
+  "spec": "설계지시안_단국대네컷_v3.4.md §2 · §3 단계 1 · 인수인계 v3 §6.3 교체 계약",
   "files": [
     {
       "path": "site/map/campus-map.svg",
@@ -35,63 +36,120 @@
   "reference": "map-reference.md",
   "landmarks": [
     {
-      "id": "lm-gate",
-      "name": "정문",
-      "x": 0.5,
-      "y": 0.7,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-library",
-      "name": "중앙도서관",
-      "x": 0.35,
-      "y": 0.54,
+      "id": "lm-field",
+      "name": "대운동장",
+      "x": 0.72,
+      "y": 0.25,
       "geoVerified": true
     },
     {
       "id": "lm-museum",
-      "name": "단국대 박물관",
-      "x": 0.67,
+      "name": "석주선기념박물관",
+      "x": 0.23,
+      "y": 0.35,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-nanpa",
+      "name": "난파기념음악관",
+      "x": 0.49,
       "y": 0.34,
       "geoVerified": true
     },
     {
+      "id": "lm-history",
+      "name": "단국역사관",
+      "x": 0.77,
+      "y": 0.36,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-plaza",
+      "name": "평화의 광장 · 곰상",
+      "x": 0.44,
+      "y": 0.45,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-library",
+      "name": "퇴계기념중앙도서관",
+      "x": 0.26,
+      "y": 0.54,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-deulsaem",
+      "name": "들샘길",
+      "x": 0.64,
+      "y": 0.55,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-gate",
+      "name": "정문 · 상징탑",
+      "x": 0.48,
+      "y": 0.64,
+      "geoVerified": true
+    },
+    {
+      "id": "lm-station",
+      "name": "죽전역",
+      "x": 0.5,
+      "y": 0.775,
+      "geoVerified": true
+    },
+    {
       "id": "lm-artshall",
-      "name": "죽전 포은아트홀",
+      "name": "용인포은아트홀",
       "x": 0.76,
-      "y": 0.83,
+      "y": 0.845,
       "geoVerified": true
     },
     {
       "id": "lm-bojeong",
-      "name": "보정동 카페거리 입구",
-      "x": 0.33,
-      "y": 0.86,
+      "name": "보정동 카페거리",
+      "x": 0.26,
+      "y": 0.868,
       "geoVerified": true
     },
     {
       "id": "lm-tancheon",
       "name": "탄천",
-      "x": 0.14,
-      "y": 0.78,
+      "x": 0.1,
+      "y": 0.8,
       "geoVerified": false
     }
   ],
   "geoExceptions": [
     {
       "id": "lm-tancheon",
-      "why": "사용자가 「위치 상관 없음」이라 확정(확정 4 · 인터뷰 #5). 미관상 배치이며 지리 검증 대상이 아니다."
+      "why": "사용자가 「위치 상관 없음」이라 확정(확정 4 · 인터뷰 #5). 미관상 배치이며 지리 검증 대상이 아니다. 단 보정동 카페거리가 탄천변이라는 출처(S8)는 지켜 물길을 카페거리 옆으로 지나가게 그렸다."
     }
   ],
   "approval": {
     "status": "approved",
     "reviewer": "사용자(담임교사)",
     "date": "2026-08-22",
-    "note": "지리 승인 정지점 통과. 포은아트홀=용인포은아트홀(캠퍼스 밖 약 2km) 확인. 구조 유지 조건으로 추후 외부 AI 도구로 SVG 그림 품질 향상 예정 — 교체 시 viewBox 0 0 900 1300 · lm-* id 6종 · 좌표계 fraction-0-1 계약 준수 필수"
+    "note": "지도 v2(랜드마크 12곳) 지리 승인 정지점 통과. 사용자가 §4 상대관계 표 중 R2(대운동장이 캠퍼스 최고지점)·R6(석주선기념박물관이 평화의 광장과 인접)·R4(들샘길이 공대와 도서관 사이)를 참으로 판정했다. 특히 R6은 v1 배치를 뒤집은 정정이라 이 판정으로 확정됐다(§2-4). 구조 유지 조건으로 추후 외부 AI 도구로 그림 품질 향상 예정 — 교체 시 viewBox 0 0 900 1300 · 좌표계 fraction-0-1 · lm-* id 계약 준수 필수."
   },
+  "previousApproval": {
+    "mapVersion": "1",
+    "landmarkCount": 6,
+    "status": "approved",
+    "reviewer": "사용자(담임교사)",
+    "date": "2026-08-22",
+    "note": "랜드마크 6곳판(정문·중앙도서관·단국대 박물관·죽전 포은아트홀·보정동 카페거리 입구·탄천)에 대한 승인. 포은아트홀=용인포은아트홀(캠퍼스 밖 약 2km) 확인. 구조 유지 조건으로 추후 그림 품질 향상 예정이라는 단서가 붙어 있었고, v2가 그 교체다."
+  },
+  "changesInV2": [
+    "랜드마크 6곳 → 12곳. 신설: lm-field(대운동장) · lm-nanpa(난파기념음악관) · lm-history(단국역사관) · lm-plaza(평화의 광장·곰상) · lm-deulsaem(들샘길) · lm-station(죽전역).",
+    "이름 정정: lm-museum 「단국대 박물관」 → 「석주선기념박물관」, lm-artshall 「죽전 포은아트홀」 → 「용인포은아트홀」(정식 명칭), lm-bojeong 「보정동 카페거리 입구」 → 「보정동 카페거리」.",
+    "lm-station(죽전역)을 캠퍼스 밖 갈림 지점으로 신설. 용인포은아트홀·보정동 카페거리가 둘 다 죽전역에서 갈라져 나가므로, v1의 「좌우로 갈려 반대 방향으로 읽힌다」 문제(인수인계 v3 §6.4)가 문구 보강이 아니라 구조로 해소됐다.",
+    "평화의 광장·대운동장·공학관군·인문상경사범관은 v1에서 lm- 없는 장식이었다. 이 중 평화의 광장과 대운동장은 현장체험학습 방문 대상이라 랜드마크로 승격했고, 나머지는 장식으로 남겼다.",
+    "viewBox 0 0 900 1300 · 좌표계 fraction-0-1 · lm- 접두 규칙은 그대로다(교체 계약 준수)."
+  ],
   "notes": [
-    "colorSource 'common.js'의 모둠 색 팔레트는 단계 2(§2 #9)에서 추가된다 — 2026-08-21 현재 common.js에 팔레트 없음. 지도 자산에는 모둠 색이 들어 있지 않으므로 충돌 없음.",
-    "campus-map.svg는 방위 정렬 지도가 아니라 오르막 동선 모식도다(map-reference.md §1-1).",
-    "approval.status가 'approved'가 되기 전에는 단계 2에 진입하지 않는다(§2)."
+    "campus-map.svg는 방위 정렬 지도가 아니라 오르막 동선 모식도다(map-reference.md §1-1). 나침반을 그리지 않는다 — 방위를 말해 주는 출처를 찾지 못했다.",
+    "approval.status가 'approved'가 되기 전에는 배포하지 않는다(F38이 막는다).",
+    "이 지도는 다시 교체될 예정이다(사용자 계획: 다른 AI 도구로 그림 품질 향상). 그때도 지켜야 하는 것은 viewBox·좌표계·lm-* id 세 가지뿐이며, 건물 위치가 바뀌면 LANDMARKS x/y와 이 파일을 함께 고친다."
   ]
 }
