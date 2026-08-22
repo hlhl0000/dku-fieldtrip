@@ -123,6 +123,26 @@ export const FRAMES = [
     accent: { color: '#a8c3a0', height: 4 }
   },
   {
+    // 여행로그 지도(campus-map.svg)와 같은 팔레트를 쓴다 — 크림 종이·갈색 잉크·구리 지붕.
+    // 배경 자산을 올리지 않아도 이 색만으로 완성된 한 벌이 되도록 골랐다. 자산을 올리면
+    // 종이 질감·리본·모서리 장식이 더해진다(vintage-frame-bg.png · 안내서 §15).
+    //
+    // 문구 색이 크림(#fdf6e3·#f3d9bd)인 이유: 문구가 앉는 위·아래 띠가 **자산이 있든
+    // 없든 갈색**이기 때문이다. 자산 없이 쓰면 background 색 #8c5b34 위에, 자산을 올리면
+    // 같은 색 리본 위에 얹힌다 — 둘 다 읽힌다. 배경색과 자산의 바탕색을 일부러 맞춰
+    // 두었으니, 자산을 다시 그릴 때도 위·아래 띠는 어두운 갈색으로 남겨야 한다.
+    id: 'vintage-travellog',
+    name: '빈티지 여행로그형',
+    layoutId: 'vertical4',
+    background: '#8c5b34',
+    cellBackground: '#f5edd8',
+    cellBorder: '#6f5f47',
+    cellBorderWidth: 3,
+    topText: { color: '#fdf6e3', size: 34, weight: '800' },
+    bottomText: { color: '#f3d9bd', size: 28, weight: '600' },
+    accent: { color: '#c9a24a', height: 3 }
+  },
+  {
     id: 'custom-upload',
     name: '업로드한 이미지 프레임',
     layoutId: 'vertical4',
