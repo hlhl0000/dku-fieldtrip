@@ -213,6 +213,12 @@ function badgeFor(st) {
   return el('span', 'badge badge-' + st, statusText(st));
 }
 
+// 업로드 버튼 문면 — 이미 올린 사진이 있으면 「다시」다. 목록 카드와 지도 시트가
+// 같은 함수를 쓴다(F-1). 한쪽만 고쳐 두 화면이 다른 말을 하는 일이 없게 한다.
+function pickLabel(st) {
+  return (st === 'synced' || st === 'queued' || st === 'error') ? '사진 다시 올리기' : '사진 올리기';
+}
+
 // ── 지도 뷰 ───────────────────────────────────────────────────────────────
 // 렌더러는 순수 함수다 — 여기서 모델을 만들어 넘길 뿐, 렌더러 안에서 DB를 읽지 않는다.
 function mapModel() {
@@ -349,8 +355,7 @@ function paintSheet() {
   setText(sheetHint, hintEl ? hintEl.textContent : '');
 
   sheetPick.hidden = false;
-  sheetPick.textContent = (st === 'synced' || st === 'queued' || st === 'error')
-    ? '사진 다시 올리기' : '사진 올리기';
+  sheetPick.textContent = pickLabel(st);
   sheetRetry.hidden = st !== 'error';
 }
 
@@ -475,6 +480,16 @@ function render() {
     // 허용하므로, 선택창을 학생에게 돌려주고 카메라는 그 안의 한 갈래로 둔다.
     input.addEventListener('change', function () { onPick(loc.locIndex, input); });
     card.appendChild(input);
+
+    // 큰 업로드 버튼. 브라우저 기본 파일 위젯은 폰에서 작고 눈에 띄지 않아, 학생이
+    // 눌러야 할 가장 중요한 조작이 카드에서 가장 약했다. input은 **지우지 않고**
+    // 화면에서만 감추고(.loc-file — 스크린리더·자동화는 계속 찾는다) label[for]가
+    // 그 input을 연다. input을 새로 만들지 않으므로 「업로드 input 원천 1곳」 계약이
+    // 그대로다(§5 금지 28 · F36). 시트의 버튼과 같은 문면 규칙을 쓴다.
+    const pick = el('label', 'upload-button', pickLabel(st));
+    pick.id = 'pick-' + loc.locIndex;
+    pick.setAttribute('for', input.id);
+    card.appendChild(pick);
 
     // 오류 상태에서도 다음 장소는 이미 열려 있다(확정 23-⑴). 그래서 오류 카드의 안내는
     // 「올리면 열린다」가 아니라 재시도·교체 두 길을 알려 준다(확정 23-⑵).

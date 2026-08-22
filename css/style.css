@@ -246,7 +246,42 @@ button:disabled {
   margin-bottom: 10px;
 }
 
-.loc-file { margin-bottom: 8px; }
+/* 업로드 input은 **지우지 않고 화면에서만 감춘다** — 스크린리더가 읽고, 라벨이
+   for로 열고, 자동화가 찾을 수 있어야 한다. display:none 은 쓰지 않는다(요소가
+   상자를 잃어 보조기술·도구가 못 찾는다). 학생에게 보이는 것은 .upload-button 이다. */
+.loc-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 카드에서 학생이 눌러야 할 가장 중요한 조작. 시트의 버튼과 같은 크기·색으로
+   맞춰 두 화면이 같은 물건으로 보이게 한다. */
+.upload-button {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 16px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+/* 키보드 사용자에게는 감춘 input의 초점이 이 버튼 위에 보여야 한다. */
+.loc-file:focus-visible + .upload-button {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 .loc-hint, .loc-status { margin: 0 0 8px; padding: 0; font-size: 13px; }
 .loc-status { color: var(--ink-weak); min-height: 1em; }
 
