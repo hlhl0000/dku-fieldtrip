@@ -468,7 +468,11 @@ function render() {
     input.accept = 'image/*';
     input.id = 'file-' + loc.locIndex;
     input.className = 'loc-file';
-    input.setAttribute('capture', 'environment');
+    // capture 속성을 **붙이지 않는다.** 붙이면 안드로이드·iOS가 선택창을 건너뛰고
+    // 카메라를 곧바로 연다 — 이미 찍어 둔 사진을 고를 길이 사라진다. 이 앱은 갤러리
+    // 업로드를 정상 경로로 전제한다(설계지시안 v1 §확정 6: 「갤러리 업로드 시 EXIF
+    // 시각 신뢰 불가」). 오프라인 대기·재업로드·네컷 모두 나중에 몰아 올리는 것을
+    // 허용하므로, 선택창을 학생에게 돌려주고 카메라는 그 안의 한 갈래로 둔다.
     input.addEventListener('change', function () { onPick(loc.locIndex, input); });
     card.appendChild(input);
 
