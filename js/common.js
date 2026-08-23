@@ -139,10 +139,14 @@ export function markIdle() {
 }
 
 // ── 시각 표기 ─────────────────────────────────────────────────────────────
+// 값은 세 가지로 온다 — 데모(MockDB)는 ISO 문자열, Firebase는 **Firestore Timestamp 객체**,
+// 그리고 Date. new Date(Timestamp)는 Invalid Date가 되어 전부 '없음'으로 찍혔다(실측:
+// 설문 제출시각·수정시각이 화면과 CSV에서 통째로 비었다). 데모 e2e는 문자열만 지나므로
+// 이 결함을 원리적으로 못 본다 — 세 경우를 함께 다루는 toDateSafe로 통일한다.
 export function formatTime(value) {
   if (!value) return '없음';
-  const d = value instanceof Date ? value : new Date(value);
-  if (isNaN(d.getTime())) return '없음';
+  const d = toDateSafe(value);
+  if (!d || isNaN(d.getTime())) return '없음';
   const p = function (n) { return ('0' + n).slice(-2); };
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
     ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
