@@ -48,10 +48,76 @@ body.page-admin #app { max-width: 1040px; }
   #narrow-note { display: block; }
   .course-row { grid-template-columns: 1fr; }
 }
+/* ── 사후 설문 (설문 v1 §3 단계 3a·3b) ─────────────────────────────────── */
+.survey-warn {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--wait);
+  border-radius: 8px;
+  background: #fbf0d9;
+  color: #5a3d00;
+  font-size: 13px;
+}
+#roster-text { width: 100%; font-family: ui-monospace, "Consolas", monospace; font-size: 13px; }
+/* PIN 절취표 — 1인 1칸. 잘라서 나눠 준다(안내서_당일운영 §6 규약 승계). */
+.pin-cut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+.pin-cut-cell {
+  border: 1px dashed #333;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.pin-cut-cell .pin-cut-who { font-weight: 700; }
+.pin-cut-cell .pin-cut-pin {
+  font-family: ui-monospace, "Consolas", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+.survey-q-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.survey-q-row .row-actions { display: flex; gap: 4px; }
+.survey-q-row .row-actions button { width: auto; padding: 8px 10px; }
+.survey-q-row .survey-q-options { grid-column: 1 / -1; }
+.survey-preview { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.survey-preview .survey-q { margin: 0 0 16px; }
+.survey-preview .survey-q-label { margin: 0 0 6px; font-weight: 700; }
+.survey-preview .survey-scale, .survey-preview .survey-choice {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.survey-preview .survey-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;
+}
+.survey-preview .survey-option input { width: auto; flex: 0 0 auto; margin: 0; }
+.survey-preview textarea { width: 100%; }
+.survey-preview .survey-count { text-align: right; margin: 2px 0 0; }
+/* 응답 고르개는 「학번 이름 · N모둠」이 다 보여야 한다 — .inline-row .field의 200px
+   고정 폭으로는 잘린다. 같은 자리를 덮어써야 하므로 선택자를 그 규칙보다 좁게 쓴다. */
+.inline-row .field.survey-pick-field { flex: 0 0 340px; }
+#survey-answer-body td { vertical-align: top; white-space: pre-wrap; word-break: break-word; }
+#survey-answer-body th { white-space: nowrap; }
+
 @media print {
   body * { visibility: hidden; }
   #print-area, #print-area * { visibility: visible; }
   #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  /* PIN 절취표를 인쇄할 때는 그 영역만 보인다. 두 표가 한 장에 섞이지 않는다. */
+  body.print-pins #print-area, body.print-pins #print-area * { visibility: hidden; }
+  body.print-pins #pin-print-area, body.print-pins #pin-print-area * { visibility: visible; }
+  body.print-pins #pin-print-area { position: absolute; left: 0; top: 0; width: 100%; }
 }
 </style>
 </head>
@@ -263,6 +329,122 @@ body.page-admin #app { max-width: 1040px; }
       <p id="reset-msg" class="note" role="status"></p>
     </section>
 
+    <!-- ── 5. 사후 설문 — 명렬표·PIN (설문 v1 §3 단계 3a) ────────────────── -->
+    <section class="card">
+      <h2 class="section-title">5. 사후 설문 — 명렬표·PIN</h2>
+      <p id="roster-warn" class="survey-warn" hidden>명렬표가 아직 등록되지 않았습니다.
+        학생 설문 화면은 명렬표를 등록해야 열립니다.</p>
+      <p class="note">「학번(탭 또는 공백)이름」을 한 줄에 한 사람씩 붙여넣으세요. 학번은 숫자 5자리입니다.
+        등록하면 학생마다 PIN 4자리가 자동으로 발급됩니다. 다시 등록해도 이미 있는 학번의 PIN은 바뀌지 않습니다.</p>
+      <div class="field">
+        <label for="roster-text">명렬표 붙여넣기</label>
+        <textarea id="roster-text" rows="8" placeholder="10401&#9;홍길동&#10;10402&#9;김이름"></textarea>
+      </div>
+      <div class="button-row">
+        <button id="roster-save-btn" type="button">명렬표 등록</button>
+      </div>
+      <div id="roster-confirm" class="confirm-box" hidden>
+        <p class="error" id="roster-confirm-text"></p>
+        <p class="note">이미 등록된 학번의 PIN은 그대로 유지됩니다. 명렬표에서 빠진 학번의 PIN도 지우지 않습니다.</p>
+        <div class="button-row">
+          <button id="roster-cancel" type="button" class="secondary">취소</button>
+          <button id="roster-force" type="button">다시 등록합니다</button>
+        </div>
+      </div>
+      <p id="roster-error" class="error" role="alert" hidden></p>
+      <p id="roster-msg" class="note" role="status"></p>
+
+      <h3 class="section-title">PIN 조회 (분실 시)</h3>
+      <div class="inline-row">
+        <div class="field">
+          <label for="pin-lookup-sid">학번</label>
+          <input id="pin-lookup-sid" type="text" inputmode="numeric" maxlength="5">
+        </div>
+        <button id="pin-lookup-btn" type="button" class="secondary">PIN 보기</button>
+      </div>
+      <p id="pin-lookup-msg" class="note" role="status"></p>
+
+      <div class="button-row" id="pin-print-row" hidden>
+        <button id="pin-print-btn" type="button" class="secondary">PIN 절취표 인쇄</button>
+      </div>
+      <div id="pin-print-area" hidden>
+        <h3 class="section-title" id="pin-print-title">사후 설문 PIN 절취표</h3>
+        <p class="note">칸마다 한 사람입니다. 점선을 따라 잘라서 한 사람에게 한 칸씩 나눠 주세요.
+          통째로 게시하면 방어가 즉시 무너집니다.</p>
+        <div class="pin-cut-grid" id="pin-cut-grid"></div>
+      </div>
+    </section>
+
+    <!-- ── 6. 사후 설문 — 문항·마감·수합 (설문 v1 §3 단계 3b) ────────────── -->
+    <section class="card" id="survey-board">
+      <h2 class="section-title">6. 사후 설문 — 문항·마감·수합</h2>
+
+      <h3 class="section-title">문항 편집</h3>
+      <p id="survey-default-note" class="note">문항을 한 번도 저장하지 않으면 기본 양식 6문항이 그대로 학생 화면에 나옵니다.
+        아래는 지금 적용되는 문항입니다. 고칠 것이 없으면 그대로 두세요.</p>
+      <div id="survey-q-list"></div>
+      <div class="button-row">
+        <button id="survey-add-scale5" type="button" class="secondary">5점 척도 추가</button>
+        <button id="survey-add-choice" type="button" class="secondary">객관식 추가</button>
+        <button id="survey-add-text" type="button" class="secondary">서술형 추가</button>
+      </div>
+      <div id="survey-q-confirm" class="confirm-box" hidden>
+        <p class="error" id="survey-q-confirm-text"></p>
+        <p class="note">이미 제출된 응답의 그 문항은 CSV에서 「[삭제된 문항 …]」 열로 남습니다. 사라지지는 않습니다.</p>
+        <div class="button-row">
+          <button id="survey-q-cancel" type="button" class="secondary">취소</button>
+          <button id="survey-q-force" type="button" class="danger">알겠습니다. 바꿉니다</button>
+        </div>
+      </div>
+      <div class="button-row">
+        <button id="survey-q-save" type="button">문항 저장</button>
+        <button id="survey-q-revert" type="button" class="secondary">기본 양식으로 되돌리기</button>
+      </div>
+      <p id="survey-q-error" class="error" role="alert" hidden></p>
+      <p id="survey-q-msg" class="note" role="status"></p>
+
+      <h3 class="section-title">미리보기</h3>
+      <p class="note">학생 화면과 <strong>같은 렌더러</strong>로 그립니다. 여기서 보이는 그대로 학생에게 나옵니다.</p>
+      <div class="survey-preview" id="survey-preview"></div>
+
+      <h3 class="section-title">마감</h3>
+      <p id="survey-close-state" class="note" role="status"></p>
+      <div class="button-row">
+        <button id="survey-close-btn" type="button" class="secondary">설문 마감</button>
+        <button id="survey-open-btn" type="button" class="secondary" hidden>마감 풀기</button>
+      </div>
+      <div id="survey-close-confirm" class="confirm-box" hidden>
+        <p class="error" id="survey-close-confirm-text"></p>
+        <p class="note">마감하면 학생은 자기 응답을 읽을 수만 있고 고칠 수 없습니다. 다시 풀 수는 있습니다.</p>
+        <div class="button-row">
+          <button id="survey-close-cancel" type="button" class="secondary">취소</button>
+          <button id="survey-close-force" type="button">알겠습니다. 마감합니다</button>
+        </div>
+      </div>
+      <p id="survey-close-msg" class="note" role="status"></p>
+
+      <h3 class="section-title">제출 현황</h3>
+      <p id="survey-dup-warn" class="survey-warn" hidden></p>
+      <p id="survey-count" class="note" role="status"></p>
+      <p id="survey-missing" class="note"></p>
+      <div class="button-row">
+        <button id="survey-reload-btn" type="button" class="secondary">현황 새로 읽기</button>
+        <button id="survey-csv-btn" type="button">CSV 내려받기</button>
+      </div>
+      <p id="survey-csv-msg" class="note" role="status"></p>
+
+      <h3 class="section-title">개별 응답 열람</h3>
+      <div class="inline-row">
+        <div class="field survey-pick-field">
+          <label for="survey-answer-pick">응답</label>
+          <select id="survey-answer-pick"></select>
+        </div>
+      </div>
+      <table class="pw-table">
+        <tbody id="survey-answer-body"></tbody>
+      </table>
+    </section>
+
     <section class="card">
       <div class="button-row">
         <a class="link-button" href="teacher.html">교사 대시보드로</a>
@@ -275,7 +457,7 @@ body.page-admin #app { max-width: 1040px; }
 import { MODE, classLabels } from './js/firebase-config.js';
 import { db, isCourseLocked } from './js/db.js';
 import {
-  classOptions, setText, el, clear, registerServiceWorker, makeSpotId, groupColor
+  classOptions, setText, el, clear, registerServiceWorker, makeSpotId, groupColor, formatTime
 } from './js/common.js';
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
@@ -284,6 +466,13 @@ import {
 } from './frames/frames.js';
 import { composeFourcut } from './js/fourcut.js';
 import { compressFrameAsset } from './js/compress.js';
+// 설문의 문항·형식·PIN 규약은 survey.js 하나가 원천이다(F-1).
+// 문항 문면(DEFAULT_SURVEY_QUESTIONS)·CSV 형식·렌더러를 이 화면에서 다시 타이핑하지 않는다.
+import {
+  parseRosterText, rosterPinPreview, defaultQuestions, validateQuestions, normalizeQuestions,
+  renderQuestions, buildSurveyCsv, csvFileName, csvColumns, duplicateSids, duplicateWarningText,
+  sidOfAnswerId, SCALE5_LABELS, SCALE5_MIN, QUESTION_TYPES, QUESTION_TYPE_LABELS
+} from './js/survey.js';
 
 const TEACHER_KEY = 'dku:teacher';
 
@@ -366,6 +555,7 @@ function subscribe(nextClassId) {
     renderGroupSelect();
     renderCopySources();
   });
+  reloadSurvey();   // 반이 바뀌면 명렬표·PIN·문항·응답도 그 반 것으로 다시 읽는다(설문 v1 §3 단계 3a·3b)
 }
 
 classSelect.addEventListener('change', function () { subscribe(classSelect.value); });
@@ -1233,6 +1423,577 @@ document.getElementById('reset-force').addEventListener('click', async function 
     setText(resetMsg, e && e.message ? e.message : '초기화하지 못했습니다');
   }
 });
+
+// ── 5. 사후 설문 — 명렬표·PIN (설문 v1 §3 단계 3a) ───────────────────────
+// PIN의 소재지는 rosterPins(교사 전용 문서)와 응답 문서 **경로**뿐이다(§5 금지 8b).
+// 이 화면이 PIN을 다루는 유일한 자리이며, 학생 화면에는 남의 PIN이 오지 않는다.
+const rosterTextEl = document.getElementById('roster-text');
+const rosterWarn = document.getElementById('roster-warn');
+const rosterError = document.getElementById('roster-error');
+const rosterMsg = document.getElementById('roster-msg');
+const rosterConfirm = document.getElementById('roster-confirm');
+const rosterConfirmText = document.getElementById('roster-confirm-text');
+const pinPrintArea = document.getElementById('pin-print-area');
+const pinPrintRow = document.getElementById('pin-print-row');
+const pinCutGrid = document.getElementById('pin-cut-grid');
+const pinLookupSid = document.getElementById('pin-lookup-sid');
+const pinLookupMsg = document.getElementById('pin-lookup-msg');
+
+let surveyRoster = { students: {}, pins: {} };
+let pendingRoster = null;
+
+function renderPinCutTable() {
+  clear(pinCutGrid);
+  const sids = Object.keys(surveyRoster.students).sort();
+  sids.forEach(function (sid) {
+    const cell = el('div', 'pin-cut-cell');
+    cell.setAttribute('data-sid', sid);
+    cell.appendChild(el('div', 'pin-cut-who', (classLabels[classId] || classId) + ' ' + sid + ' ' + surveyRoster.students[sid]));
+    cell.appendChild(el('div', '', '설문 PIN'));
+    cell.appendChild(el('div', 'pin-cut-pin', surveyRoster.pins[sid] || '-'));
+    cell.appendChild(el('div', '', '잃어버리면 선생님께 말하세요'));
+    pinCutGrid.appendChild(cell);
+  });
+  const any = sids.length > 0;
+  pinPrintArea.hidden = !any;
+  pinPrintRow.hidden = !any;
+  rosterWarn.hidden = any;
+}
+
+async function reloadSurveyRoster() {
+  try {
+    const r = await db.getRoster(classId);
+    const p = await db.getRosterPins(classId);
+    surveyRoster = { students: (r && r.students) || {}, pins: (p && p.pins) || {} };
+  } catch (e) {
+    surveyRoster = { students: {}, pins: {} };
+  }
+  renderPinCutTable();
+}
+
+async function commitRoster(students) {
+  try {
+    const res = await db.saveRoster(classId, students);
+    await reloadSurveyRoster();
+    renderSurveyStatus();   // 명렬표가 바뀌면 미제출 명단도 그 자리에서 다시 그린다(단계 3b)
+    setText(rosterMsg, '명렬표 ' + res.count + '명 등록. 기존 PIN ' + res.kept.length
+      + '건 보존 / 신규 발급 ' + res.issued.length + '건.');
+  } catch (e) {
+    show(rosterError, e && e.message ? e.message : '명렬표를 등록하지 못했습니다');
+  }
+}
+
+document.getElementById('roster-save-btn').addEventListener('click', async function () {
+  show(rosterError, '');
+  setText(rosterMsg, '');
+  rosterConfirm.hidden = true;
+  const parsed = parseRosterText(rosterTextEl.value);
+  if (parsed.errors.length) {
+    show(rosterError, parsed.errors.join(' / '));
+    return;
+  }
+  const already = Object.keys(surveyRoster.students).length;
+  if (!already) {
+    await commitRoster(parsed.students);
+    return;
+  }
+  // 재등록은 2단계 확인이다. 보존·발급 건수를 **쓰기 전에** 계산해 보여 준다 —
+  // 여기서 기존 PIN이 갈리면 전원의 기존 응답 경로가 끊긴다(§5 금지 8d).
+  const pv = rosterPinPreview(surveyRoster.pins, parsed.sids);
+  pendingRoster = parsed.students;
+  setText(rosterConfirmText, '이미 ' + already + '명이 등록돼 있습니다. ' + parsed.count
+    + '명으로 다시 등록합니다 — 기존 PIN ' + pv.kept.length + '건 보존 / 신규 발급 '
+    + pv.issued.length + '건' + (pv.dropped.length ? ' / 명렬표에서 빠지는 학번 ' + pv.dropped.length + '건' : '') + '.');
+  rosterConfirm.hidden = false;
+});
+
+document.getElementById('roster-cancel').addEventListener('click', function () {
+  rosterConfirm.hidden = true;
+  pendingRoster = null;
+  setText(rosterMsg, '다시 등록하지 않았습니다.');
+});
+
+document.getElementById('roster-force').addEventListener('click', async function () {
+  rosterConfirm.hidden = true;
+  const students = pendingRoster;
+  pendingRoster = null;
+  if (students) await commitRoster(students);
+});
+
+document.getElementById('pin-lookup-btn').addEventListener('click', function () {
+  const sid = pinLookupSid.value.trim();
+  const name = surveyRoster.students[sid];
+  if (!name) {
+    setText(pinLookupMsg, '그 학번은 명렬표에 없습니다.');
+    return;
+  }
+  setText(pinLookupMsg, sid + ' ' + name + ' — PIN ' + (surveyRoster.pins[sid] || '없음'));
+});
+
+// 인쇄할 때만 절취표 영역이 보이게 한다. 모둠 비밀번호표와 한 장에 섞이지 않는다.
+document.getElementById('pin-print-btn').addEventListener('click', function () {
+  document.body.classList.add('print-pins');
+  window.print();
+  document.body.classList.remove('print-pins');
+});
+
+// ── 6. 사후 설문 — 문항·마감·수합 (설문 v1 §3 단계 3b) ───────────────────
+// 문항 문면·CSV 형식·렌더러는 survey.js 하나가 원천이다(F-1). 이 화면은 편집 상태만 들고
+// 있다가 저장 시점에 넘긴다. 미리보기는 학생 화면과 **같은 renderQuestions()**를 부른다 —
+// 시행 전에 교사가 실물을 눈으로 확인하는 자리이므로(X-3 방어) 두 화면이 갈리면 안 된다.
+const surveyQList = document.getElementById('survey-q-list');
+const surveyPreview = document.getElementById('survey-preview');
+const surveyDefaultNote = document.getElementById('survey-default-note');
+const surveyQError = document.getElementById('survey-q-error');
+const surveyQMsg = document.getElementById('survey-q-msg');
+const surveyQConfirm = document.getElementById('survey-q-confirm');
+const surveyQConfirmText = document.getElementById('survey-q-confirm-text');
+const surveyCloseState = document.getElementById('survey-close-state');
+const surveyCloseBtn = document.getElementById('survey-close-btn');
+const surveyOpenBtn = document.getElementById('survey-open-btn');
+const surveyCloseConfirm = document.getElementById('survey-close-confirm');
+const surveyCloseConfirmText = document.getElementById('survey-close-confirm-text');
+const surveyCloseMsg = document.getElementById('survey-close-msg');
+const surveyDupWarn = document.getElementById('survey-dup-warn');
+const surveyCountEl = document.getElementById('survey-count');
+const surveyMissingEl = document.getElementById('survey-missing');
+const surveyCsvMsg = document.getElementById('survey-csv-msg');
+const surveyAnswerPick = document.getElementById('survey-answer-pick');
+const surveyAnswerBody = document.getElementById('survey-answer-body');
+
+let surveyConfig = { questions: defaultQuestions(), closed: false, edited: false };
+let surveyDraft = defaultQuestions();   // 편집 중인 사본. 「문항 저장」을 눌러야 서버로 간다
+let surveyAnswers = [];
+let pendingQuestions = null;            // 2단계 확인을 기다리는 제안 문항 배열
+let qSeq = 0;
+
+function cloneQ(q) {
+  const out = { id: q.id, type: q.type, label: q.label, required: q.required !== false };
+  if (q.type === 'choice') out.options = (q.options || []).slice();
+  return out;
+}
+
+function draftCopy() {
+  return surveyDraft.map(cloneQ);
+}
+
+// 신규 문항 id. 한 번 나간 id는 응답 맵의 키이므로 다시 쓰지 않는다.
+function newQuestionId(type) {
+  qSeq += 1;
+  return 'q_' + type + '_' + Date.now().toString(36) + '_' + qSeq;
+}
+
+// 어떤 문항이 사라지거나 유형이 바뀌면, 그 문항에 답한 응답이 고아가 된다.
+// **저장본**과 대조해 영향을 받는 응답 수를 세어 2단계 확인의 근거로 쓴다.
+function affectedByChange(next) {
+  const byId = {};
+  (next || []).forEach(function (q) { byId[q.id] = q; });
+  const hurt = [];
+  (surveyConfig.questions || []).forEach(function (q) {
+    const n = byId[q.id];
+    if (!n || n.type !== q.type) hurt.push(q.id);
+  });
+  if (!hurt.length) return { count: 0, ids: hurt };
+  let count = 0;
+  surveyAnswers.forEach(function (a) {
+    const map = (a && a.answers) || {};
+    const touched = hurt.some(function (id) {
+      return map[id] !== undefined && map[id] !== null && map[id] !== '';
+    });
+    if (touched) count += 1;
+  });
+  return { count: count, ids: hurt };
+}
+
+// 문항 배열을 바꾸는 유일한 통로. 응답에 영향이 있으면 확인을 먼저 받는다.
+function proposeQuestions(next, what) {
+  show(surveyQError, '');
+  setText(surveyQMsg, '');
+  const hit = affectedByChange(next);
+  if (!hit.count) {
+    surveyDraft = next;
+    renderSurveyQuestions();
+    return;
+  }
+  pendingQuestions = next;
+  setText(surveyQConfirmText, what + ' — 이미 제출된 응답 ' + hit.count + '건에 영향이 있습니다'
+    + ' (문항 ' + hit.ids.join(', ') + ').');
+  surveyQConfirm.hidden = false;
+}
+
+document.getElementById('survey-q-cancel').addEventListener('click', function () {
+  surveyQConfirm.hidden = true;
+  pendingQuestions = null;
+  renderSurveyQuestions();
+  setText(surveyQMsg, '문항을 바꾸지 않았습니다.');
+});
+
+document.getElementById('survey-q-force').addEventListener('click', function () {
+  surveyQConfirm.hidden = true;
+  const next = pendingQuestions;
+  pendingQuestions = null;
+  if (!next) return;
+  surveyDraft = next;
+  renderSurveyQuestions();
+});
+
+function renderSurveyQuestions() {
+  clear(surveyQList);
+  surveyDraft.forEach(function (q, i) {
+    const row = el('div', 'survey-q-row');
+    row.setAttribute('data-pos', String(i));
+    row.setAttribute('data-qid', q.id);
+
+    const typeWrap = el('div', 'field');
+    const typeLabel = el('label', '', '유형');
+    typeLabel.setAttribute('for', 'sq-type-' + i);
+    const sel = document.createElement('select');
+    sel.id = 'sq-type-' + i;
+    QUESTION_TYPES.forEach(function (t) {
+      const o = document.createElement('option');
+      o.value = t;
+      o.textContent = QUESTION_TYPE_LABELS[t] || t;
+      sel.appendChild(o);
+    });
+    sel.value = q.type;
+    sel.addEventListener('change', function () {
+      const next = draftCopy();
+      next[i].type = sel.value;
+      if (sel.value === 'choice' && !Array.isArray(next[i].options)) next[i].options = [];
+      if (sel.value !== 'choice') delete next[i].options;
+      proposeQuestions(next, '문항 「' + (q.label || q.id) + '」의 유형을 바꿉니다');
+    });
+    typeWrap.appendChild(typeLabel);
+    typeWrap.appendChild(sel);
+    row.appendChild(typeWrap);
+
+    const labelWrap = el('div', 'field');
+    const labelLabel = el('label', '', '문항 내용');
+    labelLabel.setAttribute('for', 'sq-label-' + i);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'sq-label-' + i;
+    input.value = q.label || '';
+    input.addEventListener('input', function () {
+      surveyDraft[i].label = input.value;
+      renderSurveyPreview();
+    });
+    labelWrap.appendChild(labelLabel);
+    labelWrap.appendChild(input);
+    row.appendChild(labelWrap);
+
+    const actions = el('div', 'row-actions');
+    const up = el('button', 'secondary', '↑');
+    up.type = 'button';
+    up.id = 'sq-up-' + i;
+    up.disabled = i === 0;
+    up.addEventListener('click', function () { moveQuestion(i, -1); });
+    const down = el('button', 'secondary', '↓');
+    down.type = 'button';
+    down.id = 'sq-down-' + i;
+    down.disabled = i === surveyDraft.length - 1;
+    down.addEventListener('click', function () { moveQuestion(i, 1); });
+    const del = el('button', 'secondary', '삭제');
+    del.type = 'button';
+    del.id = 'sq-del-' + i;
+    del.addEventListener('click', function () {
+      const next = draftCopy();
+      next.splice(i, 1);
+      proposeQuestions(next, '문항 「' + (q.label || q.id) + '」을 삭제합니다');
+    });
+    actions.appendChild(up);
+    actions.appendChild(down);
+    actions.appendChild(del);
+    row.appendChild(actions);
+
+    if (q.type === 'choice') {
+      const optWrap = el('div', 'field survey-q-options');
+      const optLabel = el('label', '', '선택지 — 한 줄에 하나씩, 2개 이상');
+      optLabel.setAttribute('for', 'sq-opts-' + i);
+      const ta = document.createElement('textarea');
+      ta.id = 'sq-opts-' + i;
+      ta.rows = 3;
+      ta.value = (q.options || []).join('\n');
+      ta.addEventListener('input', function () {
+        surveyDraft[i].options = ta.value.split(/\r?\n/)
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean);
+        renderSurveyPreview();
+      });
+      optWrap.appendChild(optLabel);
+      optWrap.appendChild(ta);
+      row.appendChild(optWrap);
+    }
+
+    surveyQList.appendChild(row);
+  });
+  renderSurveyPreview();
+}
+
+function moveQuestion(i, delta) {
+  const j = i + delta;
+  if (j < 0 || j >= surveyDraft.length) return;
+  const next = draftCopy();
+  const tmp = next[i];
+  next[i] = next[j];
+  next[j] = tmp;
+  // 순서 바꾸기는 문항을 없애지도 유형을 바꾸지도 않는다 — 확인 없이 바로 적용한다.
+  surveyDraft = next;
+  renderSurveyQuestions();
+}
+
+function renderSurveyPreview() {
+  const v = validateQuestions(surveyDraft);
+  if (!v.ok) {
+    clear(surveyPreview);
+    surveyPreview.appendChild(el('p', 'note',
+      '아직 미리보기를 그릴 수 없습니다 — ' + v.errors.join(' / ')));
+    return;
+  }
+  renderQuestions(surveyPreview, v.questions, { readOnly: true, idPrefix: 'pv-' });
+}
+
+function addQuestion(type) {
+  const next = draftCopy();
+  const q = { id: newQuestionId(type), type: type, label: '', required: true };
+  if (type === 'choice') q.options = [];
+  next.push(q);
+  surveyDraft = next;
+  renderSurveyQuestions();
+  setText(surveyQMsg, '문항을 하나 더했습니다. 내용을 채우고 「문항 저장」을 누르세요.');
+}
+
+document.getElementById('survey-add-scale5').addEventListener('click', function () { addQuestion('scale5'); });
+document.getElementById('survey-add-choice').addEventListener('click', function () { addQuestion('choice'); });
+document.getElementById('survey-add-text').addEventListener('click', function () { addQuestion('text'); });
+
+document.getElementById('survey-q-revert').addEventListener('click', function () {
+  proposeQuestions(defaultQuestions(), '문항을 기본 양식으로 되돌립니다');
+});
+
+document.getElementById('survey-q-save').addEventListener('click', async function () {
+  show(surveyQError, '');
+  setText(surveyQMsg, '');
+  const v = validateQuestions(surveyDraft);
+  if (!v.ok) {
+    show(surveyQError, v.errors.join(' / '));
+    return;
+  }
+  try {
+    surveyConfig = await db.saveSurveyConfig(classId, { questions: v.questions, closed: surveyConfig.closed });
+    surveyDraft = normalizeQuestions(surveyConfig.questions).map(cloneQ);
+    renderSurveyQuestions();
+    renderSurveyDefaultNote();
+    setText(surveyQMsg, '문항 ' + surveyConfig.questions.length + '개를 저장했습니다. 학생 화면에 바로 적용됩니다.');
+  } catch (e) {
+    const msg = e && e.message ? e.message : '문항을 저장하지 못했습니다';
+    show(surveyQError, explainWriteError(e, msg));
+  }
+});
+
+function renderSurveyDefaultNote() {
+  setText(surveyDefaultNote, surveyConfig.edited
+    ? '문항을 저장한 적이 있습니다. 아래가 지금 학생에게 나가는 문항입니다.'
+    : '아직 문항을 저장한 적이 없습니다 — 지금은 기본 양식 ' + defaultQuestions().length
+      + '문항이 그대로 학생 화면에 나옵니다. 고칠 것이 없으면 그대로 두세요.');
+}
+
+// ── 마감 (수동 버튼 · 자동 타이머 없음) ───────────────────────────────────
+function renderSurveyCloseState() {
+  setText(surveyCloseState, surveyConfig.closed
+    ? '지금 마감 상태입니다. 학생은 자기 응답을 읽을 수만 있고 고칠 수 없습니다.'
+    : '지금 열려 있습니다. 학생이 제출하고 다시 고칠 수 있습니다.');
+  surveyCloseBtn.hidden = surveyConfig.closed === true;
+  surveyOpenBtn.hidden = surveyConfig.closed !== true;
+}
+
+async function applyClosed(flag) {
+  setText(surveyCloseMsg, '');
+  try {
+    // questions를 넘기지 않는다 — closed만 바꾸고 저장된 문항은 그대로 둔다.
+    surveyConfig = await db.saveSurveyConfig(classId, { closed: flag });
+    renderSurveyCloseState();
+    setText(surveyCloseMsg, flag ? '마감했습니다.' : '마감을 풀었습니다. 학생이 다시 제출할 수 있습니다.');
+  } catch (e) {
+    const msg = e && e.message ? e.message : '마감 상태를 바꾸지 못했습니다';
+    setText(surveyCloseMsg, explainWriteError(e, msg));
+  }
+}
+
+surveyCloseBtn.addEventListener('click', function () {
+  const students = Object.keys(surveyRoster.students || {}).length;
+  const submitted = submittedSids().length;
+  setText(surveyCloseConfirmText, '설문을 마감합니다. 지금 제출 ' + submitted + ' / 전체 ' + students
+    + '명입니다 — 아직 안 낸 학생은 마감 뒤에는 낼 수 없습니다.');
+  surveyCloseConfirm.hidden = false;
+});
+
+document.getElementById('survey-close-cancel').addEventListener('click', function () {
+  surveyCloseConfirm.hidden = true;
+  setText(surveyCloseMsg, '마감하지 않았습니다.');
+});
+
+document.getElementById('survey-close-force').addEventListener('click', async function () {
+  surveyCloseConfirm.hidden = true;
+  await applyClosed(true);
+});
+
+surveyOpenBtn.addEventListener('click', async function () { await applyClosed(false); });
+
+// ── 제출 현황 ─────────────────────────────────────────────────────────────
+function submittedSids() {
+  const seen = {};
+  surveyAnswers.forEach(function (a) {
+    const sid = (a && a.sid) ? a.sid : sidOfAnswerId(a && a.aid);
+    if (sid) seen[sid] = true;
+  });
+  return Object.keys(seen).sort();
+}
+
+function renderSurveyStatus() {
+  const students = surveyRoster.students || {};
+  const sids = Object.keys(students).sort();
+  const done = {};
+  submittedSids().forEach(function (sid) { done[sid] = true; });
+  const missing = sids.filter(function (sid) { return !done[sid]; });
+  setText(surveyCountEl, '제출 ' + (sids.length - missing.length) + ' / 전체 ' + sids.length
+    + '명 · 응답 문서 ' + surveyAnswers.length + '건');
+  setText(surveyMissingEl, sids.length
+    ? (missing.length
+      ? '아직 안 낸 학생 ' + missing.length + '명 — ' + missing.map(function (sid) {
+        return sid + ' ' + students[sid];
+      }).join(', ')
+      : '모두 냈습니다.')
+    : '명렬표를 먼저 등록하세요.');
+  // 같은 학번의 응답이 2건이면 PIN이 바뀐 이력이 있다는 뜻이다(불변식 ③-c).
+  show(surveyDupWarn, duplicateWarningText(duplicateSids(surveyAnswers)));
+}
+
+// ── 개별 응답 열람 ────────────────────────────────────────────────────────
+// 고르개의 값은 목록 위치다. 응답 문서 id에는 PIN이 들어 있어 화면에 내지 않는다(§5 금지 8b).
+function answerText(col, v) {
+  if (v === undefined || v === null || v === '') return '';
+  if (col.type === 'scale5') {
+    const n = Number(v);
+    const word = SCALE5_LABELS[n - SCALE5_MIN];
+    return word ? n + '. ' + word : String(v);
+  }
+  return String(v);
+}
+
+function renderAnswerPicker() {
+  const keep = surveyAnswerPick.value;
+  clear(surveyAnswerBody);
+  clear(surveyAnswerPick);
+  if (!surveyAnswers.length) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = '아직 응답이 없습니다';
+    surveyAnswerPick.appendChild(o);
+    return;
+  }
+  const nth = {};
+  surveyAnswers.forEach(function (a, i) {
+    const sid = (a && a.sid) ? a.sid : (sidOfAnswerId(a && a.aid) || '');
+    nth[sid] = (nth[sid] || 0) + 1;
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = sid + ' ' + (a.name || '') + ' · '
+      + (a.groupNo ? a.groupNo + '모둠' : '모둠 모름')
+      + (nth[sid] > 1 ? ' (' + nth[sid] + '번째 응답)' : '');
+    surveyAnswerPick.appendChild(o);
+  });
+  // 고르던 자리를 지키되, 그 자리가 없어졌으면 첫 줄로 간다.
+  // `Number('')`은 NaN이 아니라 0이다 — 이걸 놓치면 첫 렌더에서 value에 ''가 들어가고,
+  // 그런 option이 없어 고르개가 **빈 칸으로** 보인다(아래 표는 0번을 그리고 있는데도).
+  const keepIdx = keep === '' ? -1 : Number(keep);
+  surveyAnswerPick.value = surveyAnswers[keepIdx] ? String(keepIdx) : '0';
+  renderAnswerDetail();
+}
+
+function renderAnswerDetail() {
+  clear(surveyAnswerBody);
+  const a = surveyAnswers[Number(surveyAnswerPick.value)];
+  if (!a) return;
+  const put = function (k, v) {
+    const tr = document.createElement('tr');
+    tr.appendChild(el('th', '', k));
+    tr.appendChild(el('td', '', v));
+    surveyAnswerBody.appendChild(tr);
+  };
+  put('학번', (a.sid || sidOfAnswerId(a.aid) || ''));
+  put('이름', a.name || '');
+  put('모둠', a.groupNo ? String(a.groupNo) : '');
+  put('제출시각', formatTime(a.submittedAt));
+  put('수정시각', formatTime(a.updatedAt));
+  // 열 구성은 CSV와 같은 함수에서 나온다 — 사라진 문항의 응답도 여기서 보인다.
+  csvColumns(normalizeQuestions(surveyConfig.questions), surveyAnswers).forEach(function (c) {
+    put(c.label, answerText(c, (a.answers || {})[c.qid]));
+  });
+}
+
+surveyAnswerPick.addEventListener('change', renderAnswerDetail);
+
+// ── CSV 내려받기 ──────────────────────────────────────────────────────────
+document.getElementById('survey-csv-btn').addEventListener('click', function () {
+  setText(surveyCsvMsg, '');
+  try {
+    const text = buildSurveyCsv({
+      questions: normalizeQuestions(surveyConfig.questions),
+      answers: surveyAnswers,
+      roster: surveyRoster.students,
+      formatTime: formatTime
+    });
+    const name = csvFileName(classId, new Date());
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    setText(surveyCsvMsg, name + ' — 미제출자 행을 포함해 ' + text.split('\r\n').length
+      + '줄을 만들었습니다. 엑셀에서 바로 열립니다(UTF-8 BOM).');
+  } catch (e) {
+    setText(surveyCsvMsg, e && e.message ? e.message : 'CSV를 만들지 못했습니다');
+  }
+});
+
+document.getElementById('survey-reload-btn').addEventListener('click', async function () {
+  setText(surveyCsvMsg, '');
+  await reloadSurvey();
+  setText(surveyCloseMsg, '');
+});
+
+// ── 설문 절 전체 다시 읽기 ────────────────────────────────────────────────
+async function reloadSurveyBoard() {
+  try {
+    surveyConfig = await db.getSurveyConfig(classId);
+  } catch (e) {
+    surveyConfig = { questions: defaultQuestions(), closed: false, edited: false };
+  }
+  try {
+    surveyAnswers = await db.listSurveyAnswers(classId);
+  } catch (e) {
+    surveyAnswers = [];
+  }
+  surveyDraft = normalizeQuestions(surveyConfig.questions).map(cloneQ);
+  surveyQConfirm.hidden = true;
+  surveyCloseConfirm.hidden = true;
+  pendingQuestions = null;
+  renderSurveyDefaultNote();
+  renderSurveyQuestions();
+  renderSurveyCloseState();
+  renderSurveyStatus();
+  renderAnswerPicker();
+}
+
+async function reloadSurvey() {
+  await reloadSurveyRoster();
+  await reloadSurveyBoard();
+}
 
 // ── 시작 ──────────────────────────────────────────────────────────────────
 (async function start() {

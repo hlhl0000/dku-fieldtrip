@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>사후 설문 — 단국대 현장체험학습</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* 이 화면 전용 규칙만 둔다(공용 규칙은 css/style.css). 설문 v1 §3 단계 2. */
+  .survey-q { margin: 0 0 20px; }
+  .survey-q:last-child { margin-bottom: 0; }
+  .survey-q-label { margin: 0 0 8px; font-weight: 700; word-break: keep-all; }
+  .survey-scale, .survey-choice { display: flex; flex-direction: column; gap: 6px; }
+  .survey-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    word-break: keep-all;
+  }
+  .survey-option input { width: auto; flex: 0 0 auto; margin: 0; }
+  .survey-count { margin: 4px 0 0; text-align: right; }
+  .survey-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .survey-head .section-title { margin: 0; }
+  .survey-closed {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 2px solid var(--lock);
+    border-radius: 10px;
+    background: #eef0f3;
+    color: #3d434b;
+    font-size: 0.95rem;
+  }
+</style>
+</head>
+<body class="page-survey">
+<main id="app">
+  <header class="app-header">
+    <h1>사후 설문</h1>
+    <p class="sub" id="who"></p>
+  </header>
+
+  <p id="notice" class="error" role="alert" hidden></p>
+
+  <!-- 명렬표를 못 읽으면 여기서 막는다. 작성까지 갔다가 서버 거부로 끝나는 것이 최악의 경로다. -->
+  <section id="not-ready" class="card" hidden>
+    <p class="error">아직 설문이 준비되지 않았습니다 — 선생님께 알리세요</p>
+    <a class="link-button" href="mission.html">미션 화면으로 돌아가기</a>
+  </section>
+
+  <section id="enter-card" class="card" hidden>
+    <h2 class="section-title">본인 확인</h2>
+    <div class="field">
+      <label for="sid-select">학번</label>
+      <select id="sid-select"></select>
+    </div>
+    <div class="field">
+      <label for="name-input">이름</label>
+      <input id="name-input" type="text" readonly>
+    </div>
+    <div class="field">
+      <label for="pin-input">PIN 4자리</label>
+      <input id="pin-input" type="text" inputmode="numeric" autocomplete="off" maxlength="4">
+    </div>
+    <p class="note">PIN을 확인하고, 처음이면 그대로 작성하세요.</p>
+    <p id="enter-error" class="error" role="alert" hidden></p>
+    <button id="start-btn" type="button">설문 시작</button>
+  </section>
+
+  <section id="form-card" class="card" hidden>
+    <div class="survey-head">
+      <h2 class="section-title" id="form-title">설문 작성</h2>
+      <span id="form-badge" class="badge" hidden></span>
+    </div>
+    <p id="closed-note" class="survey-closed" hidden>마감되었습니다. 내 응답을 읽을 수만 있습니다.</p>
+    <div id="questions"></div>
+    <p id="form-error" class="error" role="alert" hidden></p>
+    <p id="draft-note" class="note" role="status"></p>
+    <div class="button-row">
+      <button id="back-btn" type="button" class="secondary">학번 다시 고르기</button>
+      <button id="submit-btn" type="button">제출</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <a class="link-button" href="mission.html">미션 화면으로 돌아가기</a>
+  </section>
+</main>
+
+<script type="module">
+import { db, SURVEY_DENIED_CODE } from './js/db.js';
+import { renderInitError, renderPersistenceBanner, classLabels } from './js/firebase-config.js';
+import { requireLogin, setText, registerServiceWorker } from './js/common.js';
+import { renderQuestions, validateAnswers, isPin } from './js/survey.js';
+
+const session = requireLogin();
+const app = document.getElementById('app');
+const notice = document.getElementById('notice');
+const notReady = document.getElementById('not-ready');
+const enterCard = document.getElementById('enter-card');
+const enterError = document.getElementById('enter-error');
+const formCard = document.getElementById('form-card');
+const sidSelect = document.getElementById('sid-select');
+const nameInput = document.getElementById('name-input');
+const pinInput = document.getElementById('pin-input');
+const startBtn = document.getElementById('start-btn');
+const backBtn = document.getElementById('back-btn');
+const submitBtn = document.getElementById('submit-btn');
+const questionsBox = document.getElementById('questions');
+const formTitle = document.getElementById('form-title');
+const formBadge = document.getElementById('form-badge');
+const formError = document.getElementById('form-error');
+const closedNote = document.getElementById('closed-note');
+const draftNote = document.getElementById('draft-note');
+
+registerServiceWorker();
+
+let roster = { students: {} };
+let config = null;
+let form = null;          // renderQuestions()의 반환 — read()로 값을 거둔다
+let activeSid = null;
+let activePin = null;
+let draftTimer = null;
+
+const SUBMITTED_BADGE = '제출됨 · 마감 전까지 수정 가능';
+
+function showNotice(text) {
+  setText(notice, text);
+  notice.hidden = !text;
+}
+
+function showEnterError(text) {
+  setText(enterError, text);
+  enterError.hidden = !text;
+}
+
+function showFormError(text) {
+  setText(formError, text);
+  formError.hidden = !text;
+}
+
+// 임시저장 키에 PIN을 넣지 않는다(§5 금지 8b). 반·학번까지만 쓴다.
+function draftKey(sid) {
+  return 'dku:survey:draft:' + session.classId + '/' + sid;
+}
+
+function readDraft(sid) {
+  try {
+    const raw = localStorage.getItem(draftKey(sid));
+    const v = raw ? JSON.parse(raw) : null;
+    return v && typeof v === 'object' ? v : null;
+  } catch (e) { return null; }
+}
+
+function writeDraft(sid, values) {
+  try { localStorage.setItem(draftKey(sid), JSON.stringify(values)); } catch (e) { /* 저장 실패는 조용히 */ }
+}
+
+function dropDraft(sid) {
+  try { localStorage.removeItem(draftKey(sid)); } catch (e) { /* 무시 */ }
+}
+
+// 입력 중 임시저장(신호 끊김 대비). 사진용 대기 큐에 설문을 태우지 않는다(§5 금지 5).
+function scheduleDraftSave() {
+  if (!form || !activeSid) return;
+  if (draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(function () {
+    draftTimer = null;
+    writeDraft(activeSid, form.read());
+    setText(draftNote, '이 기기에 임시저장했습니다');
+  }, 400);
+}
+
+function fillSidOptions() {
+  const sids = Object.keys(roster.students || {}).sort();
+  while (sidSelect.firstChild) sidSelect.removeChild(sidSelect.firstChild);
+  sids.forEach(function (sid) {
+    const opt = document.createElement('option');
+    opt.value = sid;
+    opt.textContent = sid + ' ' + roster.students[sid];
+    sidSelect.appendChild(opt);
+  });
+  paintName();
+}
+
+function paintName() {
+  const sid = sidSelect.value;
+  nameInput.value = sid ? (roster.students[sid] || '') : '';
+}
+
+function showEnter() {
+  activeSid = null;
+  activePin = null;
+  form = null;
+  formCard.hidden = true;
+  enterCard.hidden = false;
+  showFormError('');
+  setText(draftNote, '');
+}
+
+// 기존 응답이 읽히면 미리 채우고, 없으면 임시저장본 → 빈 양식 순으로 채운다.
+// 「PIN 틀림」과 「미제출」을 구분해 알려주지 않는다(추정 ③-d) — 구분 응답 자체가
+// PIN 존재 확인 채널이 되기 때문이다.
+function openForm(sid, pin, existing) {
+  activeSid = sid;
+  activePin = pin;
+  const draft = existing ? null : readDraft(sid);
+  const values = existing ? (existing.answers || {}) : (draft || {});
+  const closed = config.closed === true;
+  form = renderQuestions(questionsBox, config.questions, {
+    values: values,
+    readOnly: closed,
+    onChange: closed ? null : scheduleDraftSave
+  });
+  setText(formTitle, roster.students[sid] + ' (' + sid + ')');
+  formBadge.hidden = !existing;
+  if (existing) setText(formBadge, closed ? '제출됨' : SUBMITTED_BADGE);
+  closedNote.hidden = !closed;
+  submitBtn.hidden = closed;
+  setText(draftNote, draft ? '이 기기에 임시저장된 내용을 불러왔습니다' : '');
+  showFormError('');
+  enterCard.hidden = true;
+  formCard.hidden = false;
+}
+
+async function onStart() {
+  showEnterError('');
+  const sid = sidSelect.value;
+  const pin = pinInput.value.trim();
+  if (!sid) { showEnterError('학번을 고르세요'); return; }
+  if (!isPin(pin)) { showEnterError('PIN은 숫자 4자리입니다'); return; }
+  startBtn.disabled = true;
+  try {
+    const existing = await db.getSurveyAnswer(session.classId, sid, pin);
+    openForm(sid, pin, existing);
+  } catch (e) {
+    showEnterError('설문을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요');
+  } finally {
+    startBtn.disabled = false;
+  }
+}
+
+async function onSubmit() {
+  if (!form || !activeSid) return;
+  // 제출 직전에 대기 중인 임시저장 타이머를 끈다. 안 끄면 제출 성공 뒤 400ms에 타이머가
+  // 깨어나 방금 지운 임시저장본을 되살리고 안내 문구까지 덮어쓴다(e2e S42에서 실측).
+  if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
+  const values = form.read();
+  writeDraft(activeSid, values);
+  const checked = validateAnswers(form.questions, values);
+  if (!checked.ok) {
+    showFormError(checked.errors.join(' / '));
+    return;
+  }
+  showFormError('');
+  submitBtn.disabled = true;
+  try {
+    await db.submitSurveyAnswer(session.classId, activeSid, activePin, { answers: checked.answers });
+    dropDraft(activeSid);
+    formBadge.hidden = false;
+    setText(formBadge, SUBMITTED_BADGE);
+    setText(draftNote, '제출했습니다. 마감 전까지 다시 고칠 수 있습니다');
+  } catch (e) {
+    await paintSubmitFailure(e);
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+// 틀린 PIN은 읽기에서 조용하고 **쓰기에서만** 터진다 — 학생이 다 쓴 뒤 실패하는 최악의
+// 타이밍이므로, 내용이 기기에 남아 있다는 사실을 반드시 함께 알린다(§3 단계 2).
+// 같은 코드로 오는 마감 거부와는 config를 다시 읽어 갈라 준다.
+async function paintSubmitFailure(e) {
+  const denied = e && e.code === SURVEY_DENIED_CODE;
+  if (!denied) {
+    showFormError('임시저장됨 — 신호가 잡히는 곳에서 다시 제출하세요');
+    return;
+  }
+  let closed = false;
+  try {
+    const fresh = await db.getSurveyConfig(session.classId);
+    closed = fresh.closed === true;
+    if (closed) config = fresh;
+  } catch (ignored) { /* 못 읽으면 PIN 안내로 간다 */ }
+  if (closed) {
+    closedNote.hidden = false;
+    submitBtn.hidden = true;
+    showFormError('마감되었습니다. 더 이상 제출할 수 없습니다');
+    return;
+  }
+  showFormError('PIN이 맞지 않습니다. 선생님께 확인하세요. 작성한 내용은 이 기기에 저장돼 있습니다');
+}
+
+sidSelect.addEventListener('change', paintName);
+startBtn.addEventListener('click', onStart);
+backBtn.addEventListener('click', showEnter);
+submitBtn.addEventListener('click', onSubmit);
+
+// ── 시작 ──────────────────────────────────────────────────────────────────
+// 부트 순서는 mission.html과 같다(§3 단계 2). db.js의 세션은 인스턴스 메모리라
+// 새 페이지 로드에서 자동 복원되지 않는다 — 이 절차를 빠뜨리면 FirebaseDB 쓰기가
+// 통째로 실패하는데, 데모 모드에서는 걸리지 않는다.
+(async function start() {
+  let ready = null;
+  try {
+    ready = await db.ensureReady();
+  } catch (e) {
+    if (e && e.kind === 'persistence') {
+      renderInitError(app, {
+        kind: 'persistence',
+        detail: e.message,
+        onRetry: function () { location.reload(); },
+        onMemoryCache: function () {
+          localStorage.setItem('dku:memoryCache', '1');
+          location.reload();
+        }
+      });
+    } else {
+      renderInitError(app, {
+        kind: 'fatal',
+        detail: e && e.message ? e.message : String(e),
+        onRetry: function () { location.reload(); }
+      });
+    }
+    return;
+  }
+  if (ready && ready.offlineProtection === false) renderPersistenceBanner(app);
+
+  if (!db.session) {
+    db.session = {
+      classId: session.classId, gid: session.gid,
+      groupNo: session.groupNo, courseRev: session.courseRev
+    };
+  }
+  setText(document.getElementById('who'),
+    (classLabels[session.classId] || session.classId) + ' · ' + session.groupNo + '모둠');
+
+  try {
+    config = await db.getSurveyConfig(session.classId);
+    roster = await db.getRoster(session.classId);
+  } catch (e) {
+    notReady.hidden = false;
+    return;
+  }
+  if (!roster || !Object.keys(roster.students || {}).length) {
+    notReady.hidden = false;
+    return;
+  }
+  fillSidOptions();
+  showEnter();
+  if (config.closed === true) showNotice('마감되었습니다. PIN을 넣으면 내 응답을 읽을 수 있습니다');
+})();
+</script>
+</body>
+</html>

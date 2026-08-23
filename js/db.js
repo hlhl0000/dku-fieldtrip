@@ -8,6 +8,8 @@
 //   admin.setFrameAsset / admin.clearFrameAsset / admin.setFrameOptions /
 //   getFrameTexts / getFrameAssetMeta / getFrameAssetImages / wipeLocalData /
 //   getMapSpots / admin.setMapSpot / admin.clearMapSpot            (v3.4 §2-8 · §3-C)
+//   getRoster / saveRoster / getRosterPins / getSurveyConfig / saveSurveyConfig /
+//   getSurveyAnswer / submitSurveyAnswer / listSurveyAnswers      (설문 v1 §3 단계 1)
 //
 // 진행도는 숫자 필드가 아니라 완료 집합 done:{ "L0": 승인시각 } 이다(확정 19, §5 금지 13).
 // 오프라인 전송 주체는 Firebase 모드에서 Firestore 지속 캐시(mutation queue) 하나뿐이며,
@@ -22,6 +24,12 @@ import {
   DEFAULT_FRAME_TEXTS, FRAME_ASSET_KINDS, FRAME_ASSET_MAX_BYTES,
   frameAssetDocId, FRAME_ASSET_META_DOC, DEFAULT_LAYOUT_ID
 } from '../frames/frames.js';
+// 설문의 데이터 계약은 survey.js 하나가 원천이다(F-1). 여기서 문항·형식을 다시 정의하지 않는다.
+import {
+  SURVEY_COLLECTION, SURVEY_ANSWERS_COLLECTION, SURVEY_DOC,
+  answerDocId, assertSid, assertPin, sidOfAnswerId,
+  mergeRosterPins, normalizeRoster, normalizeQuestions, validateQuestions
+} from './survey.js';
 
 // ── 상한값 (§1-3) ─────────────────────────────────────────────────────────
 export const LIMITS = {
@@ -225,6 +233,45 @@ function normalizeMapSpots(raw) {
     if (isFractionPoint(src[k])) out[k] = { x: src[k].x, y: src[k].y };
   });
   return { byId: out };
+}
+
+// ── 사후 설문 (설문 v1 §3 단계 1) ─────────────────────────────────────────
+// 두 구현이 같은 계약을 갖도록, 형식 검사·기본값 채우기는 여기 모듈 함수 하나에 둔다(F-1).
+//
+// PIN은 계정 비밀번호가 아니라 열람 토큰이다 — rosterPins(교사 전용 문서)에 **평문 문자열**로
+// 산다(§1-1 #12b). 해시로 바꾸면 규칙의 문자열 동등 비교가 깨져 전 학급 제출이 거부된다.
+// 필드명에 password·pw·passwd를 쓰지 않는다(규칙의 noSecretFields()와 충돌).
+
+// 마감·PIN 불일치·명렬표 미등록은 실서버에서 규칙이 거부한다. 데모 모드도 같은 코드로
+// 거부해, 화면의 분기 하나가 두 모드에서 같은 길을 지나게 한다(§3 단계 2).
+export const SURVEY_DENIED_CODE = 'permission-denied';
+
+function surveyDenied(message) {
+  const e = new Error(message);
+  e.code = SURVEY_DENIED_CODE;
+  return e;
+}
+
+// 저장본 → 화면이 쓰는 모양. 문항이 저장된 적 없으면 기본 양식이 적용된다.
+function normalizeSurveyConfig(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const edited = Array.isArray(d.questions) && d.questions.length > 0;
+  return {
+    questions: normalizeQuestions(d.questions),
+    closed: d.closed === true,
+    edited: edited,
+    updatedAt: d.updatedAt || null
+  };
+}
+
+// 응답 본문. PIN은 본문에 넣지 않는다 — 소재지는 rosterPins와 문서 경로뿐이다(§5 금지 8b).
+function buildAnswerBody(sid, name, groupNo, answers) {
+  return {
+    sid: sid,
+    name: name,
+    groupNo: groupNo,
+    answers: answers && typeof answers === 'object' ? answers : {}
+  };
 }
 
 // 업로드 payload 크기 검사 (§5 금지 4)
@@ -661,6 +708,108 @@ class MockDB {
       if (d && d.b64) out[kind] = { b64: d.b64, mime: d.mime };
     });
     return out;
+  }
+
+  // ── 사후 설문 (설문 v1 §3 단계 1) ───────────────────────────────────────
+  // 데모 모드도 rosterPins 대조·PIN 자동 생성을 **실제로** 구현한다 — 그래야 PIN e2e가
+  // 데모에서 성립한다(§3 단계 1). 다만 규칙의 서버 강제는 데모가 원리적으로 못 본다.
+  // _ensureStore()는 호출할 때마다 localStorage를 **다시 파싱한 새 객체**를 돌려준다.
+  // 그러므로 읽은 store와 쓰는 store가 같은 객체여야 한다 — 여기서 둘을 함께 돌려주고,
+  // 쓰는 쪽은 반드시 이 store를 _write에 넘긴다. (다른 store로 쓰면 변경이 조용히 사라진다)
+  _surveyNode(cid) {
+    const store = this._ensureStore();
+    if (!store.survey) store.survey = {};
+    if (!store.survey[cid]) store.survey[cid] = {};
+    const node = store.survey[cid];
+    if (!node.roster) node.roster = { students: {} };
+    if (!node.rosterPins) node.rosterPins = { pins: {} };
+    if (!node.config) node.config = {};
+    if (!node.answers) node.answers = {};
+    return { store: store, node: node };
+  }
+
+  async getRoster(cid) {
+    const n = this._surveyNode(cid).node;
+    return { students: Object.assign({}, n.roster.students || {}), updatedAt: n.roster.updatedAt || null };
+  }
+
+  // 등록·재등록 공통 경로. 기존 학번의 PIN을 보존하고 신규 학번에만 발급한다(§5 금지 8d).
+  async saveRoster(cid, students) {
+    const norm = normalizeRoster(students);
+    const ctx = this._surveyNode(cid);
+    const merged = mergeRosterPins(ctx.node.rosterPins.pins, norm.sids);
+    ctx.node.roster = { students: norm.students, updatedAt: new Date().toISOString() };
+    ctx.node.rosterPins = { pins: merged.pins };
+    this._write(ctx.store);
+    return { count: norm.sids.length, kept: merged.kept, issued: merged.issued };
+  }
+
+  // 교사 전용. 학생 화면은 이 메서드를 부르지 않는다(규칙에서도 isTeacher()만 통과한다).
+  async getRosterPins(cid) {
+    const n = this._surveyNode(cid).node;
+    return { pins: Object.assign({}, n.rosterPins.pins || {}) };
+  }
+
+  async getSurveyConfig(cid) {
+    return normalizeSurveyConfig(this._surveyNode(cid).node.config);
+  }
+
+  // closed를 **항상 함께 쓴다**(기본 false) — 규칙의 .get('closed', false) 폴백과 이중 방어.
+  async saveSurveyConfig(cid, cfg) {
+    const src = cfg && typeof cfg === 'object' ? cfg : {};
+    const doc = { closed: src.closed === true, updatedAt: new Date().toISOString() };
+    const ctx = this._surveyNode(cid);
+    if (src.questions !== undefined) {
+      const v = validateQuestions(src.questions);
+      if (!v.ok) throw new Error(v.errors.join(' / '));
+      doc.questions = v.questions;
+    } else if (Array.isArray(ctx.node.config.questions)) {
+      doc.questions = ctx.node.config.questions;
+    }
+    ctx.node.config = doc;
+    this._write(ctx.store);
+    return normalizeSurveyConfig(doc);
+  }
+
+  // 경로 비밀 — PIN이 틀리면 문서 주소가 달라져 읽히지 않는다. 조용히 null이다(추정 ③-d).
+  async getSurveyAnswer(cid, sid, pin) {
+    const aid = answerDocId(sid, pin);
+    const a = this._surveyNode(cid).node.answers[aid];
+    return a ? Object.assign({ aid: aid }, a) : null;
+  }
+
+  async submitSurveyAnswer(cid, sid, pin, payload) {
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    const sidOk = assertSid(sid);
+    const pinOk = assertPin(pin);
+    const ctx = this._surveyNode(cid);
+    const n = ctx.node;
+    const cfg = normalizeSurveyConfig(n.config);
+    const name = (n.roster.students || {})[sidOk];
+    if (!name) throw surveyDenied('명렬표에 없는 학번입니다');
+    if ((n.rosterPins.pins || {})[sidOk] !== pinOk) throw surveyDenied('PIN이 맞지 않습니다');
+    if (cfg.closed) throw surveyDenied('설문이 마감되었습니다');
+
+    const aid = answerDocId(sidOk, pinOk);
+    const prev = n.answers[aid] || null;
+    const groupNo = prev ? prev.groupNo : s.groupNo;
+    const body = buildAnswerBody(sidOk, name, groupNo, (payload || {}).answers);
+    const now = new Date().toISOString();
+    n.answers[aid] = Object.assign(body, {
+      submittedAt: prev ? prev.submittedAt : now,
+      updatedAt: now
+    });
+    this._write(ctx.store);
+    return { aid: aid, updated: !!prev };
+  }
+
+  // 교사 전용. 학생 화면은 목록을 시도하지 않는다(§5 금지 8c).
+  async listSurveyAnswers(cid) {
+    const answers = this._surveyNode(cid).node.answers || {};
+    return Object.keys(answers).sort().map(function (aid) {
+      return Object.assign({ aid: aid, sid: sidOfAnswerId(aid) }, answers[aid]);
+    });
   }
 
   // ── 구독 ────────────────────────────────────────────────────────────────
@@ -1431,6 +1580,119 @@ class FirebaseDB {
       }
     }
     return out;
+  }
+
+  // ── 사후 설문 (설문 v1 §3 단계 1) ───────────────────────────────────────
+  // 문서 4종: survey/config · survey/roster · survey/rosterPins(교사 전용) ·
+  // surveyAnswers/{sid}-{pin}. 학생은 목록을 시도하지 않는다(§5 금지 8c) —
+  // 목록이 열리면 문서 id에 실린 PIN이 통째로 샌다.
+  _surveyRef(cid, docId) {
+    return this.sdk.fs.doc(this.fs, 'classes', cid, SURVEY_COLLECTION, docId);
+  }
+
+  _answerRef(cid, aid) {
+    return this.sdk.fs.doc(this.fs, 'classes', cid, SURVEY_ANSWERS_COLLECTION, aid);
+  }
+
+  async getRoster(cid) {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.roster));
+    const d = snap.exists() ? (snap.data() || {}) : {};
+    return { students: d.students || {}, updatedAt: d.updatedAt || null };
+  }
+
+  // 등록·재등록 공통 경로. 기존 학번의 PIN을 보존하고 신규 학번에만 발급한다(§5 금지 8d).
+  // rosterPins는 교사 전용 문서다 — roster에는 pins를 싣지 않는다(§5 금지 8b).
+  async saveRoster(cid, students) {
+    const sdk = await this._loadSdk();
+    const norm = normalizeRoster(students);
+    const pinsSnap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.rosterPins));
+    const prevPins = pinsSnap.exists() ? ((pinsSnap.data() || {}).pins || {}) : {};
+    const merged = mergeRosterPins(prevPins, norm.sids);
+    const batch = sdk.fs.writeBatch(this.fs);
+    batch.set(this._surveyRef(cid, SURVEY_DOC.roster), {
+      students: norm.students, updatedAt: sdk.fs.serverTimestamp()
+    });
+    batch.set(this._surveyRef(cid, SURVEY_DOC.rosterPins), { pins: merged.pins });
+    await batch.commit();
+    return { count: norm.sids.length, kept: merged.kept, issued: merged.issued };
+  }
+
+  async getRosterPins(cid) {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.rosterPins));
+    return { pins: snap.exists() ? ((snap.data() || {}).pins || {}) : {} };
+  }
+
+  async getSurveyConfig(cid) {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.config));
+    return normalizeSurveyConfig(snap.exists() ? snap.data() : null);
+  }
+
+  // closed를 **항상 함께 쓴다**(기본 false) — 규칙의 .get('closed', false) 폴백과 이중 방어.
+  async saveSurveyConfig(cid, cfg) {
+    const sdk = await this._loadSdk();
+    const src = cfg && typeof cfg === 'object' ? cfg : {};
+    const doc = { closed: src.closed === true, updatedAt: sdk.fs.serverTimestamp() };
+    if (src.questions !== undefined) {
+      const v = validateQuestions(src.questions);
+      if (!v.ok) throw new Error(v.errors.join(' / '));
+      doc.questions = v.questions;
+    }
+    await sdk.fs.setDoc(this._surveyRef(cid, SURVEY_DOC.config), doc, { merge: true });
+    return this.getSurveyConfig(cid);
+  }
+
+  // PIN이 틀리면 문서 주소가 달라져 읽히지 않는다. 거부도 조용히 null이다(추정 ③-d) —
+  // 「PIN 틀림」과 「미제출」을 구분해 알려주면 그 응답 자체가 PIN 확인 채널이 된다.
+  async getSurveyAnswer(cid, sid, pin) {
+    const sdk = await this._loadSdk();
+    const aid = answerDocId(sid, pin);
+    try {
+      const snap = await sdk.fs.getDoc(this._answerRef(cid, aid));
+      return snap.exists() ? Object.assign({ aid: aid }, snap.data()) : null;
+    } catch (e) {
+      if (e && e.code === SURVEY_DENIED_CODE) return null;
+      throw e;
+    }
+  }
+
+  // 학생 경로. rosterPins를 읽지 않는다(읽을 수 없다) — PIN 대조는 규칙이 서버에서 한다.
+  // 틀린 PIN은 읽기에서 조용하고 **쓰기에서 permission-denied로 터진다**. 화면은 그 코드를
+  // PIN 오류로 안내하고 작성 내용을 기기에 보존한다(§3 단계 2).
+  async submitSurveyAnswer(cid, sid, pin, payload) {
+    const sdk = await this._loadSdk();
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    const sidOk = assertSid(sid);
+    const pinOk = assertPin(pin);
+    const roster = await this.getRoster(cid);
+    const name = (roster.students || {})[sidOk];
+    if (!name) throw surveyDenied('명렬표에 없는 학번입니다');
+
+    const aid = answerDocId(sidOk, pinOk);
+    const ref = this._answerRef(cid, aid);
+    const prev = await this.getSurveyAnswer(cid, sidOk, pinOk);
+    const groupNo = prev ? prev.groupNo : s.groupNo;
+    const body = buildAnswerBody(sidOk, name, groupNo, (payload || {}).answers);
+    body.updatedAt = sdk.fs.serverTimestamp();
+    if (prev) {
+      await sdk.fs.setDoc(ref, body, { merge: true });
+    } else {
+      body.submittedAt = sdk.fs.serverTimestamp();
+      await sdk.fs.setDoc(ref, body);
+    }
+    return { aid: aid, updated: !!prev };
+  }
+
+  // 교사 전용. 규칙에서 list는 isTeacher()만 통과한다.
+  async listSurveyAnswers(cid) {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDocs(sdk.fs.collection(this.fs, 'classes', cid, SURVEY_ANSWERS_COLLECTION));
+    return snap.docs.map(function (d) {
+      return Object.assign({ aid: d.id, sid: sidOfAnswerId(d.id) }, d.data());
+    }).sort(function (a, b) { return String(a.aid) < String(b.aid) ? -1 : 1; });
   }
 
   onGroup(cb) {

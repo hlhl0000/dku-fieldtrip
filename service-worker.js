@@ -33,6 +33,10 @@ const SHELL = [
   './js/fourcut.js',
   './js/map-view.js',
   './frames/frames.js',
+  // 사후 설문 (설문 v1 §2 산출물 7). js/survey.js는 db.js가 정적으로 import 하므로
+  // 여기 없으면 **오프라인에서 미션 화면까지 함께 죽는다** — 2026-08-23 e2e 실측.
+  './survey.html',
+  './js/survey.js',
   // 지도 자산 (v3.4) — 이 셋이 없으면 캠퍼스 오프라인 첫 진입에서 지도가 뜨지 않는다.
   // 단, cache.add 실패는 무음이므로 SHELL 등재만으로 오프라인이 증명되지는 않는다(§1-1 #16).
   './map/campus-map.svg',
