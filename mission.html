@@ -14,10 +14,11 @@
     gap: 8px;
     margin: 0 0 12px;
     padding: 10px 12px;
-    border: 2px solid #d98a00;
+    border: 2px solid var(--wait-line);
     border-radius: 10px;
-    background: #fff6e5;
-    color: #5a3d00;
+    background: var(--wait-bg);
+    color: var(--wait);
+    box-shadow: inset 0 0 0 3px rgba(224, 199, 140, 0.28);
     font-size: 0.95rem;
     line-height: 1.45;
   }
@@ -42,10 +43,20 @@
   <p id="notice" class="error" role="alert" hidden></p>
   <p id="offline-note" class="note offline-note" hidden>지금 오프라인입니다. 사진은 기기에 보관되고, 연결되면 자동으로 전송됩니다.</p>
 
+  <!-- 모둠 미배정 안내 (§1-1 #14). 로그인은 정상이고 미션만 없는 상태다 —
+       아래 사후 설문 카드는 그대로 남아 이 학생도 설문을 낼 수 있다. -->
+  <section id="no-group-card" class="card" hidden>
+    <h2 class="section-title" id="no-group-title"></h2>
+    <p class="note">아직 어느 모둠에도 들어가 있지 않아 미션 화면이 열리지 않습니다.
+      선생님께 말씀드리면 모둠에 넣어 드립니다. 모둠에 들어간 뒤 이 화면을 새로고침하거나
+      다시 로그인하면 미션이 나타납니다.</p>
+    <p class="note">사후 설문은 지금도 쓸 수 있습니다 — 아래 「사후 설문 작성하기」로 들어가세요.</p>
+  </section>
+
   <!-- 지도가 기본 뷰, 기존 목록은 전환 버튼으로 유지한다(확정 7).
        목록은 숨겨져 있어도 DOM에는 항상 있다 — 시트의 「사진 올리기」가 목록 안의
        기존 input을 그대로 눌러 쓰기 때문이다(§3-D · §5 금지 28). -->
-  <div class="view-switch">
+  <div class="view-switch" id="view-switch">
     <button id="view-toggle" type="button" class="secondary" aria-pressed="false">목록으로 보기</button>
   </div>
 
@@ -57,15 +68,16 @@
 
   <ul id="loc-list" class="loc-list" hidden></ul>
 
-  <section class="card">
+  <section class="card" id="fourcut-card">
     <a id="fourcut-link" class="link-button" href="fourcut.html">인생네컷 만들기</a>
     <p class="note" id="fourcut-hint"></p>
   </section>
 
-  <!-- 사후 설문 상시 진입 (설문 v1 §3 단계 2). 잠기지 않는다 — 현장에서도 사후에도 쓴다. -->
+  <!-- 사후 설문 상시 진입 (설문 v1 §3 단계 2). 잠기지 않는다 — 현장에서도 사후에도 쓴다.
+       **모둠 미배정 학생에게도 남는다**(§1-1 #14). 로그인 신원을 그대로 쓰므로 PIN 재입력이 없다. -->
   <section class="card">
     <a id="survey-link" class="link-button" href="survey.html">사후 설문 작성하기</a>
-    <p class="note">선생님이 나눠 준 PIN 4자리가 필요합니다. 마감 전까지 다시 고칠 수 있습니다.</p>
+    <p class="note">로그인한 본인 이름으로 바로 열립니다. 마감 전까지 다시 고칠 수 있습니다.</p>
   </section>
 
   <section class="card">
@@ -126,7 +138,10 @@
 </div>
 
 <script type="module">
-import { db, statusOf, computeCurrentLocIndex, progressCount, unsentKeys } from './js/db.js';
+import {
+  db, statusOf, computeCurrentLocIndex, progressCount, unsentKeys,
+  NO_GROUP_TEXT, GROUP_CHANGED_TEXT
+} from './js/db.js';
 import { renderInitError, renderPersistenceBanner } from './js/firebase-config.js';
 import { compressPhoto } from './js/compress.js';
 import { FRAMES } from './frames/frames.js';
@@ -139,6 +154,8 @@ import {
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
 
+// 모둠 미배정 학생도 이 화면에 들어온다 — needsGroup을 요구하지 않는다(§3-0 ⑵-b).
+// 분기는 아래 render()가 한다.
 const session = requireLogin();
 const app = document.getElementById('app');
 const list = document.getElementById('loc-list');
@@ -188,8 +205,21 @@ const sheetPick = document.getElementById('sheet-pick');
 const sheetRetry = document.getElementById('sheet-retry');
 const unlockToast = document.getElementById('unlock-toast');
 
-const UNLOCK_KEY = 'dku:unlock:' + session.classId + '/' + session.gid;
-const MY_COLOR = groupColor(session.groupNo || session.gid);
+// 미배정(gid='')이면 모둠별 키·색이 성립하지 않는다. 아래 두 값은 미배정 화면에서
+// 쓰이지 않지만(업로드·해금·지도가 전부 꺼진다) 키 문자열이 반쪽으로 남지 않게 못 박는다.
+// ⚠ session은 **null일 수 있다** — requireLogin()이 index로 되돌린 경우다.
+// `location.replace()`는 스크립트를 멈추지 않으므로 모듈 본문이 계속 흐른다. 여기 세 줄이
+// 최상위에서 session을 읽는 유일한 자리라, 널 가드가 없으면 리다이렉트 직후 TypeError가
+// 콘솔에 찍힌다(§0 완료 판정 ⑶ 「콘솔 에러 0」 위반). 나머지 session 참조는 전부 함수
+// 안이고 그 함수들은 아래 start()에서만 불리므로, start()가 앞머리에서 조용히 멈춘다.
+const HAS_GROUP = !!(session && session.gid);
+const UNLOCK_KEY = HAS_GROUP ? ('dku:unlock:' + session.classId + '/' + session.gid) : null;
+const MY_COLOR = groupColor((session && (session.groupNo || session.gid)) || 1);
+
+const noGroupCard = document.getElementById('no-group-card');
+const noGroupTitle = document.getElementById('no-group-title');
+const viewSwitch = document.getElementById('view-switch');
+const fourcutCard = document.getElementById('fourcut-card');
 
 function showNotice(text) {
   setText(notice, text);
@@ -407,7 +437,7 @@ viewToggle.addEventListener('click', function () {
 // 판정은 **기존 것을 그대로 쓴다** — progressCount(state) >= 4 (확정 23-⑴ 합집합).
 // 새 집합·새 판정을 만들지 않는다(§3-A).
 function maybeCelebrate(count) {
-  if (unlockShown || count < 4) return;
+  if (!UNLOCK_KEY || unlockShown || count < 4) return;
   unlockShown = true;
   if (localStorage.getItem(UNLOCK_KEY)) return;
   localStorage.setItem(UNLOCK_KEY, '1');
@@ -426,8 +456,43 @@ document.getElementById('unlock-close').addEventListener('click', function () {
   unlockToast.hidden = true;
 });
 
+// 화면 머리글 — 개별 로그인이므로 **누구로 들어왔는지**가 먼저다(§1-2 추정 4).
+// 배정: `{이름} · {N모둠}` / 미배정: 이름만. 로그아웃 판단의 근거가 된다.
+function headerText(st) {
+  const who = (st && st.name) || session.name || '';
+  const no = st && st.groupNo ? Number(st.groupNo) + '모둠' : '';
+  if (who && no) return who + ' · ' + no;
+  return who || no || '모둠 미션';
+}
+
+// 모둠 미배정 화면 — 미션 목록·지도·네컷을 통째로 걷고 안내 카드만 남긴다.
+// 설문 카드는 DOM에 그대로 있다(§1-1 #14: 설문은 허용한다).
+function renderNoGroup() {
+  clear(list);
+  setText(document.getElementById('group-title'), headerText(state));
+  setText(countEl, '진행 0 / 0');
+  setText(lastSyncEl, formatTime(null));
+  setText(noGroupTitle, NO_GROUP_TEXT);
+  noGroupCard.hidden = false;
+  mapPanel.hidden = true;
+  list.hidden = true;
+  viewSwitch.hidden = true;
+  fourcutCard.hidden = true;
+  unsentBadge.hidden = true;
+  sheet.hidden = true;
+}
+
 function render() {
   if (!state) return;
+  // 미배정 판정은 `!gid`다. `gid == null` 비교를 쓰지 않는다 —
+  // 빈 문자열은 null과 같지 않아 조건이 통째로 빗나간다(재검 N-2).
+  if (!state.gid) {
+    renderNoGroup();
+    return;
+  }
+  noGroupCard.hidden = true;
+  viewSwitch.hidden = false;
+  fourcutCard.hidden = false;
   clear(list);
   const current = computeCurrentLocIndex(state);
   const total = (state.course || []).length;
@@ -436,8 +501,7 @@ function render() {
   // 계산은 db.js의 progressCount 하나만 쓴다 — 해금 계산과 같은 원천이다(F-1).
   const doneCount = progressCount(state);
 
-  // 화면에는 로그인 입력과 같은 형태(선행 0 없는 번호)로 보여 준다.
-  setText(document.getElementById('group-title'), Number(state.groupNo) + '모둠 미션');
+  setText(document.getElementById('group-title'), headerText(state));
   setText(countEl, '진행 ' + doneCount + ' / ' + total);
   setText(lastSyncEl, formatTime(state.lastSyncAt));
 
@@ -560,7 +624,17 @@ function paintUnsent() {
 // 여기서 얻은 데이터를 thumbSrc에 남겨 지도 폴라로이드·시트가 **그대로 재사용**한다 —
 // 지도 때문에 사진을 다시 읽지 않는다(§3-B ⑶).
 async function paintThumbs() {
-  const photos = await db.listMyPhotos();
+  let photos;
+  try {
+    photos = await db.listMyPhotos();
+  } catch (e) {
+    // 사진 읽기가 거부됐다 — 모둠 권한을 잃은 직후 옛 모둠 photos를 읽는 경우가 대표적이다
+    // (D-1 시나리오). render()가 이 함수를 await·catch 없이 부르므로, 여기서 잡지 않으면
+    // **처리되지 않은 프라미스 거부 = pageerror**가 되어 콘솔에 찍힌다.
+    // 썸네일을 못 그릴 뿐 화면 피해는 없으므로 조용히 돌아간다 — 사용자 안내는
+    // onGroup의 오류 배너가 이미 담당한다(재작업 라운드 2). 여기서 또 띄우지 않는다.
+    return;
+  }
   photos.forEach(function (p) {
     const src = 'data:' + p.mime + ';base64,' + p.full;
     thumbSrc[p.locIndex] = src;
@@ -736,6 +810,9 @@ function prefetchFrameAssets() {
 }
 
 (async function start() {
+  // requireLogin()이 index로 되돌렸다. 리다이렉트가 실제로 일어나기 전에도 이 본문은
+  // 계속 돌 수 있으므로 여기서 조용히 멈춘다 — db를 깨우지도, 세션을 읽지도 않는다.
+  if (!session) return;
   // firebase 모드에서는 여기서 SDK·Auth·Firestore가 준비된다. 이 화면은 아침 사전 로그인
   // 이후 학생이 직접 재진입·새로고침하는 유일한 화면이라 index를 거치지 않는 진입이 정상 경로다.
   // 오류 화면 2분기는 index.html의 boot()와 같은 형태를 쓴다(§2-8).
@@ -767,10 +844,12 @@ function prefetchFrameAssets() {
 
   try {
     // 새로고침·새 탭에서도 저장된 세션으로 다시 붙는다.
+    // gid는 **빈 문자열일 수 있다**(미배정) — null로 바꾸지 않는다(§3-0 ⑵).
     if (!db.session) {
       db.session = {
-        classId: session.classId, gid: session.gid,
-        groupNo: session.groupNo, courseRev: session.courseRev
+        classId: session.classId, sid: session.sid, name: session.name,
+        gid: session.gid || '', groupNo: session.groupNo || '',
+        email: session.email, courseRev: session.courseRev
       };
     }
     noticeIfRevMismatch(null);
@@ -781,6 +860,13 @@ function prefetchFrameAssets() {
     }
     noticeIfRevMismatch(state);
     paintOnline();
+
+    // 미배정은 여기서 끝낸다 — 지도·구독·프레임 프리페치를 아예 시작하지 않는다.
+    // 읽을 모둠 문서가 없고, 시작하면 빈 경로로 서버를 두드린다(§3-0 ⑵-b).
+    if (!state.gid) {
+      render();
+      return;
+    }
 
     // ── 지도 준비 ──────────────────────────────────────────────────────
     // 좌표 읽기는 **비차단이다**(재작업 A-3). 예전 판은 여기서 await 했는데, 그러면
@@ -798,6 +884,13 @@ function prefetchFrameAssets() {
       state = next;
       noticeIfRevMismatch(next);
       render();
+    }, function (err) {
+      // 구독이 끊겼다(재작업 D-1). 이 뒤로 갱신이 오지 않으므로 화면은 지금 상태로
+      // 멈춘다 — 학생이 「최신이겠거니」 하고 믿어 버리는 것이 가장 나쁜 결과다.
+      // permission-denied = 접속 중에 교사가 모둠 구성을 바꾼 경우(자가 복구 불가).
+      showNotice(err && err.code === 'permission-denied'
+        ? GROUP_CHANGED_TEXT
+        : '모둠 정보를 실시간으로 받지 못하고 있습니다. 화면을 새로고침하세요.');
     });
     prefetchFrameAssets();
   } catch (e) {

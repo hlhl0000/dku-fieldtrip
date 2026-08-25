@@ -5,11 +5,18 @@
 //   login / logout / getCachedCourse / completeLocation / currentLocIndex /
 //   listMyPhotos / getPhoto / onGroup / onDashboard / retryFailed /
 //   admin.createGroup / admin.updateCourse / admin.resetData / admin.setFrameTexts /
+//   admin.reissueStudentPin                           (로그인모둠개편 §3-0 ⑸ ⓑ — 신설) /
 //   admin.setFrameAsset / admin.clearFrameAsset / admin.setFrameOptions /
 //   getFrameTexts / getFrameAssetMeta / getFrameAssetImages / wipeLocalData /
 //   getMapSpots / admin.setMapSpot / admin.clearMapSpot            (v3.4 §2-8 · §3-C)
 //   getRoster / saveRoster / getRosterPins / getSurveyConfig / saveSurveyConfig /
 //   getSurveyAnswer / submitSurveyAnswer / listSurveyAnswers      (설문 v1 §3 단계 1)
+//   getMembership / saveMembership                    (로그인모둠개편 §3-0 ⑷ — 신설)
+//
+// 신원 모델(로그인모둠개편 §3-0 ⑴·⑵): 학생 1명 = Auth 계정 1개.
+// 세션은 { classId, sid, name, gid, groupNo(=gid), email }이고 **미배정은 gid = ''**이다
+// (null이 아니다 — 규칙의 문자열 대조·JS falsy 판정과 정합). gid가 빈 문자열인 경로에서는
+// 모둠 문서·사진·보관함을 아예 건드리지 않는다(아래 `_hasGroup()` 가드).
 //
 // 진행도는 숫자 필드가 아니라 완료 집합 done:{ "L0": 승인시각 } 이다(확정 19, §5 금지 13).
 // 오프라인 전송 주체는 Firebase 모드에서 Firestore 지속 캐시(mutation queue) 하나뿐이며,
@@ -18,7 +25,9 @@
 import {
   MODE, classIds, classLabels, firebaseConfig, activeProjectId, sdkUrls
 } from './firebase-config.js';
-import { groupEmail, doneKey, locIndexOfDoneKey, pad2, base64Bytes, ensureSpotIds } from './common.js';
+import {
+  studentEmail, studentPassword, doneKey, locIndexOfDoneKey, pad2, base64Bytes, ensureSpotIds
+} from './common.js';
 import { isFractionPoint } from '../map/map-config.js';
 import {
   DEFAULT_FRAME_TEXTS, FRAME_ASSET_KINDS, FRAME_ASSET_MAX_BYTES,
@@ -27,7 +36,7 @@ import {
 // 설문의 데이터 계약은 survey.js 하나가 원천이다(F-1). 여기서 문항·형식을 다시 정의하지 않는다.
 import {
   SURVEY_COLLECTION, SURVEY_ANSWERS_COLLECTION, SURVEY_DOC,
-  answerDocId, assertSid, assertPin, sidOfAnswerId,
+  assertSid, isSid, isPin,
   mergeRosterPins, normalizeRoster, normalizeQuestions, validateQuestions
 } from './survey.js';
 
@@ -75,20 +84,39 @@ export function normalizeFrameOptions(entry) {
   };
 }
 
-// 자격 오류 단일 고정 문구 (v3.1 db.js 계약 login — 이메일 열거 보호로 코드가 합쳐진다)
+// 자격 오류 단일 고정 문구 (로그인모둠개편 §3-0 ⑹·⑾ ③ — 계정 열거 방지 성질 승계).
+// 학번이 없는지·PIN이 틀렸는지·그 반이 없는지를 **구분해 알리지 않는다**. 구분 응답 자체가
+// 「이 학번은 있다」를 확인해 주는 채널이 되기 때문이다. e2e 기대값도 이 문자열 하나다.
 export const CREDENTIAL_ERROR_TEXT =
-  '반·모둠 번호 또는 비밀번호가 맞지 않습니다. 인쇄된 비밀번호표를 확인하세요';
+  '학번 또는 PIN이 맞지 않습니다. 받은 PIN 쪽지를 확인하세요';
+
+// 모둠 미배정 안내 (§1-1 #14 — 로그인·설문은 허용하고 미션 화면만 안내로 대체한다).
+export const NO_GROUP_TEXT = '모둠 미배정 — 선생님께 문의';
+
+// 구독이 권한을 잃었을 때의 안내 (재작업 D-1). 학생이 접속 중일 때 교사가 모둠 구성을
+// 바꾸면 옛 모둠 문서의 리스너가 규칙 재평가에서 permission-denied로 **끊긴다** —
+// 화면은 옛 모둠 상태 그대로 얼어붙고, 새 모둠도 미배정 안내도 뜨지 않는다.
+// 문면은 기존 코스 판 불일치 안내(mission.html noticeIfRevMismatch)와 같은 어조로 맞춘다.
+export const GROUP_CHANGED_TEXT = '모둠 구성이 바뀌었습니다. 로그아웃 후 다시 로그인하세요.';
 
 // 자격 외 오류 코드만 개별 한국어 문구를 둔다.
 const NON_CREDENTIAL_ERROR_TEXT = {
   'auth/too-many-requests': '로그인 시도가 많아 잠시 막혔습니다. 1분 뒤 다시 시도하세요',
   'auth/network-request-failed': '네트워크에 연결되지 않았습니다. 연결을 확인하고 다시 시도하세요',
   'auth/internal-error': '서버 오류가 발생했습니다. 잠시 뒤 다시 시도하세요',
-  'auth/user-disabled': '이 모둠 계정이 잠겼습니다. 선생님께 알리세요'
+  'auth/user-disabled': '이 계정이 잠겼습니다. 선생님께 알리세요'
 };
 
 export function loginErrorText(code) {
   return NON_CREDENTIAL_ERROR_TEXT[code] || CREDENTIAL_ERROR_TEXT;
+}
+
+// ── 미배정(gid = '') 가드 (§3-0 ⑵-b) ──────────────────────────────────────
+// 모둠이 없는 학생의 세션에서 모둠 문서 경로를 조립하면 Firestore가 빈 경로 조각으로
+// 예외를 던지고, 보관함 조회는 무의미한 접두사를 훑는다. 판정은 이 함수 하나로 모은다 —
+// `s.gid == null` 같은 비교를 쓰지 않는다(`'' == null`은 JS에서 거짓이다 — 재검 N-2).
+function hasGroup(session) {
+  return !!(session && session.gid);
 }
 
 // ── 실패 보관함 (IndexedDB · 확정 20) ─────────────────────────────────────
@@ -264,7 +292,22 @@ function normalizeSurveyConfig(raw) {
   };
 }
 
-// 응답 본문. PIN은 본문에 넣지 않는다 — 소재지는 rosterPins와 문서 경로뿐이다(§5 금지 8b).
+// 모둠 대응표 정규화 (§3-0 ⑶). 학번 5자리 키 + pad2 2자리 **문자열** 값만 남긴다.
+// 값이 숫자면 규칙의 `groupNo == groupOf()` 문자열 대조가 타입 오류가 되어 거부된다 —
+// 저장 직전 이 한 곳에서 문자열로 못 박는다. 빈 값(미배정)은 키 자체를 두지 않는다.
+export function normalizeMembership(bySid) {
+  const src = bySid && typeof bySid === 'object' ? bySid : {};
+  const out = {};
+  Object.keys(src).sort().forEach(function (raw) {
+    const sid = assertSid(raw);
+    const v = src[raw];
+    if (v === null || v === undefined || String(v).trim() === '') return;
+    out[sid] = pad2(v);
+  });
+  return out;
+}
+
+// 응답 본문. PIN은 본문에 넣지 않는다 — 소재지는 rosterPins뿐이다(§5 금지 5).
 function buildAnswerBody(sid, name, groupNo, answers) {
   return {
     sid: sid,
@@ -365,6 +408,36 @@ function demoCourse(groupNo) {
   return ensureSpotIds(out);
 }
 
+// 데모 시드의 학생 6명 — 명렬표·PIN·모둠 대응표가 한 벌로 들어간다(§3-A C1).
+// 2모둠(3명 + 2명) + **미배정 1명**이다. 미배정 학생이 시드에 없으면 미배정 경로가
+// 데모에서 원리적으로 시험되지 않는다(§1-1 #14가 걸리는 자리).
+const DEMO_STUDENTS = {
+  '10401': '김하늘',
+  '10402': '이준서',
+  '10403': '박서연',
+  '10404': '최민준',
+  '10405': '정예린',
+  '10406': '강도윤'
+};
+
+// 데모 전용 고정 PIN. 실서버의 rosterPins와 같은 자리(교사 전용 문서)에만 산다.
+// 무작위로 뽑으면 e2e가 로그인할 수 없으므로 데모에서만 값을 고정한다.
+const DEMO_PINS = {
+  '10401': '1234',
+  '10402': '2345',
+  '10403': '3456',
+  '10404': '4567',
+  '10405': '5678',
+  '10406': '6789'
+};
+
+// 모둠 대응표. 값은 pad2() 2자리 **문자열**이다(§3-0 ⑶ — 숫자 저장 금지).
+// 10406은 키를 두지 않는다 = 미배정.
+const DEMO_MEMBERSHIP = {
+  '10401': '01', '10402': '01', '10403': '01',
+  '10404': '02', '10405': '02'
+};
+
 function demoSeed() {
   const cid = classIds[0];
   const groups = {};
@@ -372,13 +445,18 @@ function demoSeed() {
     groups[gid] = {
       gid: gid,
       groupNo: gid,
-      email: groupEmail(cid, gid),
       courseRev: 1,
       course: demoCourse(gid),
       done: {},
       pending: {},
       lastSyncAt: null
     };
+  });
+  // 데모 전용 계정 대장. 실서버에서는 Firebase Auth가 갖는 것이며 Firestore에 비밀번호를
+  // 저장한다는 뜻이 아니다(§5 금지 9). 값은 이메일뿐이고 비밀번호·PIN은 담지 않는다.
+  const studentAuth = {};
+  Object.keys(DEMO_STUDENTS).forEach(function (sid) {
+    studentAuth[cid + '/' + sid] = studentEmail(cid, sid);
   });
   return {
     classes: {},
@@ -388,12 +466,17 @@ function demoSeed() {
     config: {
       frameTexts: { top: '2026 용인고 단국대 현장체험학습', bottom: '단국대학교 죽전캠퍼스' }
     },
-    // 데모 전용 자격 대응표. Firestore에 비밀번호를 저장한다는 뜻이 아니다(§5 금지 9).
-    demoAuth: (function () {
-      const m = {};
-      m[cid + '/01'] = 'demo1234';
-      m[cid + '/02'] = 'demo1234';
-      return m;
+    studentAuth: studentAuth,
+    survey: (function () {
+      const node = {};
+      node[cid] = {
+        roster: { students: Object.assign({}, DEMO_STUDENTS), updatedAt: null },
+        rosterPins: { pins: Object.assign({}, DEMO_PINS) },
+        membership: { bySid: Object.assign({}, DEMO_MEMBERSHIP), updatedAt: null },
+        config: {},
+        answers: {}
+      };
+      return node;
     })(),
     __init: (function () {
       return { cid: cid, groups: groups };
@@ -427,7 +510,7 @@ class MockDB {
       const cid = seed.__init.cid;
       s = {
         classes: {}, groups: {}, photos: {}, photoMeta: {},
-        config: seed.config, demoAuth: seed.demoAuth
+        config: seed.config, studentAuth: seed.studentAuth, survey: seed.survey
       };
       s.classes[cid] = { classId: cid, name: classLabels[cid] || cid, courseRev: 1 };
       s.groups[cid] = seed.__init.groups;
@@ -458,23 +541,39 @@ class MockDB {
   }
 
   // ── login ──────────────────────────────────────────────────────────────
-  async login(classId, groupNo, password) {
-    const gid = pad2(groupNo);
+  // 개별 PIN 로그인(§3-0 ⑵). 실서버의 절차 — 계정 인증 → membership → roster → 모둠 문서 —
+  // 를 데모에서도 **같은 순서로** 밟는다. 그래야 화면 분기 하나가 두 모드에서 같은 길을 지난다.
+  // 자격 오류는 어느 단계에서 걸리든 단일 문면이다(계정 열거 방지).
+  async login(classId, sid, pin) {
     const s = this._ensureStore();
     if (classIds.indexOf(classId) < 0) throw new Error(CREDENTIAL_ERROR_TEXT);
-    const expected = (s.demoAuth || {})[classId + '/' + gid];
-    if (!expected || expected !== String(password)) throw new Error(CREDENTIAL_ERROR_TEXT);
-    const g = this._group(classId, gid);
-    if (!g) throw new Error(CREDENTIAL_ERROR_TEXT);
+    if (!isSid(String(sid || '').trim()) || !isPin(String(pin || '').trim())) {
+      throw new Error(CREDENTIAL_ERROR_TEXT);
+    }
+    const sidOk = String(sid).trim();
+    const pinOk = String(pin).trim();
+    // 계정 존재 = 명렬표 등록으로 생성된 학생 Auth 계정(실서버의 signIn에 해당).
+    if (!(s.studentAuth || {})[classId + '/' + sidOk]) throw new Error(CREDENTIAL_ERROR_TEXT);
+    const node = this._surveyNode(classId).node;
+    if ((node.rosterPins.pins || {})[sidOk] !== pinOk) throw new Error(CREDENTIAL_ERROR_TEXT);
+
+    // 모둠 대응표가 없거나 내 학번이 없으면 미배정이다 — 로그인은 성립한다(§1-1 #14).
+    const gid = String((node.membership.bySid || {})[sidOk] || '');
+    const name = (node.roster.students || {})[sidOk] || '';
+    const g = gid ? this._group(classId, gid) : null;
 
     this.session = {
-      classId: classId, gid: gid, groupNo: gid,
-      email: groupEmail(classId, gid), courseRev: g.courseRev
+      classId: classId, sid: sidOk, name: name,
+      gid: g ? gid : '', groupNo: g ? gid : '',
+      email: studentEmail(classId, sidOk),
+      courseRev: g ? g.courseRev : null
     };
     // 코스 전체 + courseRev를 로컬에 캐시한다(오프라인에서도 코스를 본다).
-    localStorage.setItem('dku:course:' + classId + '/' + gid, JSON.stringify({
-      course: g.course, courseRev: g.courseRev
-    }));
+    if (g) {
+      localStorage.setItem('dku:course:' + classId + '/' + gid, JSON.stringify({
+        course: g.course, courseRev: g.courseRev
+      }));
+    }
     return this.getState();
   }
 
@@ -486,7 +585,7 @@ class MockDB {
   // ── 상태 조회 ───────────────────────────────────────────────────────────
   getCachedCourse() {
     const s = this.session;
-    if (!s) return null;
+    if (!hasGroup(s)) return null;
     try {
       const raw = localStorage.getItem('dku:course:' + s.classId + '/' + s.gid);
       const cached = raw ? JSON.parse(raw) : null;
@@ -498,13 +597,28 @@ class MockDB {
     } catch (e) { return null; }
   }
 
+  // 미배정 세션도 **상태를 돌려준다**(null이 아니다). null이면 화면이 로그인 실패로 읽고
+  // index로 튕겨, 로그인은 멀쩡한데 못 들어가는 상태가 된다(§1-1 #14).
+  _emptyState() {
+    const s = this.session;
+    return {
+      classId: s.classId, sid: s.sid, name: s.name, email: s.email,
+      gid: '', groupNo: '',
+      course: [], courseRev: null,
+      done: {}, pending: {}, failed: [], lastSyncAt: null
+    };
+  }
+
   async getState() {
     const s = this.session;
     if (!s) return null;
+    if (!hasGroup(s)) return this._emptyState();
     const g = this._group(s.classId, s.gid);
+    if (!g) return this._emptyState();
     const failed = await vault.listFor(s.classId, s.gid);
     return {
-      classId: s.classId, gid: s.gid, groupNo: g.groupNo,
+      classId: s.classId, sid: s.sid, name: s.name, email: s.email,
+      gid: s.gid, groupNo: g.groupNo,
       course: g.course, courseRev: g.courseRev,
       done: g.done || {}, pending: g.pending || {},
       failed: failed.map(function (f) { return doneKey(f.locIndex); }),
@@ -522,6 +636,7 @@ class MockDB {
   async completeLocation(locIndex, fullB64, thumbB64, mime, operationId) {
     const s = this.session;
     if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
     assertPureBase64(fullB64);
     assertPureBase64(thumbB64);
     assertPayloadSize(fullB64, thumbB64);
@@ -588,7 +703,7 @@ class MockDB {
 
   _flushPending() {
     const s = this.session;
-    if (!s) return;
+    if (!hasGroup(s)) return;
     const g = this._group(s.classId, s.gid);
     if (!g || !g.pending) return;
     const keys = Object.keys(g.pending);
@@ -615,6 +730,7 @@ class MockDB {
   async retryFailed(locIndex) {
     const s = this.session;
     if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
     const rows = await vault.listFor(s.classId, s.gid);
     const row = rows.filter(function (r) { return r.locIndex === locIndex; })[0];
     if (!row) throw new Error('보관된 사진이 없습니다');
@@ -623,7 +739,7 @@ class MockDB {
 
   async listFailed() {
     const s = this.session;
-    if (!s) return [];
+    if (!hasGroup(s)) return [];
     return vault.listFor(s.classId, s.gid);
   }
 
@@ -631,7 +747,7 @@ class MockDB {
   // 전송 대기·실패 보관분도 로컬에서 네컷 합성에 쓸 수 있다.
   async listMyPhotos() {
     const s = this.session;
-    if (!s) return [];
+    if (!hasGroup(s)) return [];
     const state = await this.getState();
     const store = this._ensureStore();
     const failedRows = await vault.listFor(s.classId, s.gid);
@@ -723,6 +839,7 @@ class MockDB {
     const node = store.survey[cid];
     if (!node.roster) node.roster = { students: {} };
     if (!node.rosterPins) node.rosterPins = { pins: {} };
+    if (!node.membership) node.membership = { bySid: {}, updatedAt: null };
     if (!node.config) node.config = {};
     if (!node.answers) node.answers = {};
     return { store: store, node: node };
@@ -734,14 +851,54 @@ class MockDB {
   }
 
   // 등록·재등록 공통 경로. 기존 학번의 PIN을 보존하고 신규 학번에만 발급한다(§5 금지 8d).
-  async saveRoster(cid, students) {
+  // 뒤이어 학생 계정을 만든다 — 데모에서는 대장에 이메일을 적는 것이 그 자리다.
+  //
+  // ⚠ 데모 모드의 created·existed 숫자는 **가짜다**(§7 ③ ⑸). 실제 Auth 계정 생성은
+  // 에뮬레이터 통합 시험(fbint)에서만 실증된다. 화면은 두 모드에서 같은 요약을 그린다.
+  async saveRoster(cid, students, onProgress) {
     const norm = normalizeRoster(students);
     const ctx = this._surveyNode(cid);
     const merged = mergeRosterPins(ctx.node.rosterPins.pins, norm.sids);
     ctx.node.roster = { students: norm.students, updatedAt: new Date().toISOString() };
     ctx.node.rosterPins = { pins: merged.pins };
     this._write(ctx.store);
-    return { count: norm.sids.length, kept: merged.kept, issued: merged.issued };
+
+    const store = this._ensureStore();
+    if (!store.studentAuth) store.studentAuth = {};
+    let created = 0;
+    let existed = 0;
+    norm.sids.forEach(function (sid, i) {
+      const key = cid + '/' + sid;
+      if (store.studentAuth[key]) { existed += 1; } else {
+        store.studentAuth[key] = studentEmail(cid, sid);
+        created += 1;
+      }
+      if (onProgress) onProgress(i + 1, norm.sids.length, sid);
+    });
+    this._write(store);
+    return {
+      count: norm.sids.length, kept: merged.kept, issued: merged.issued,
+      created: created, existed: existed, failed: []
+    };
+  }
+
+  // ── 모둠 대응표 (§3-0 ⑶ — 신설) ────────────────────────────────────────
+  // bySid의 값은 pad2() 2자리 **문자열**이다. 숫자로 저장하면 규칙의 문자열 대조가
+  // 타입 오류가 되어 전 학급 제출이 거부된다(survey.js:114-116 실증 전례).
+  async getMembership(cid) {
+    const n = this._surveyNode(cid).node;
+    return {
+      bySid: Object.assign({}, n.membership.bySid || {}),
+      updatedAt: n.membership.updatedAt || null
+    };
+  }
+
+  async saveMembership(cid, bySid) {
+    const norm = normalizeMembership(bySid);
+    const ctx = this._surveyNode(cid);
+    ctx.node.membership = { bySid: norm, updatedAt: new Date().toISOString() };
+    this._write(ctx.store);
+    return { count: Object.keys(norm).length };
   }
 
   // 교사 전용. 학생 화면은 이 메서드를 부르지 않는다(규칙에서도 isTeacher()만 통과한다).
@@ -771,49 +928,52 @@ class MockDB {
     return normalizeSurveyConfig(doc);
   }
 
-  // 경로 비밀 — PIN이 틀리면 문서 주소가 달라져 읽히지 않는다. 조용히 null이다(추정 ③-d).
-  async getSurveyAnswer(cid, sid, pin) {
-    const aid = answerDocId(sid, pin);
-    const a = this._surveyNode(cid).node.answers[aid];
-    return a ? Object.assign({ aid: aid }, a) : null;
+  // 신원은 세션이 갖는다 — 학번·PIN을 다시 받지 않는다(§3-0 ⑷). 문서 id는 `{sid}`다.
+  async getSurveyAnswer(cid) {
+    const s = this.session;
+    if (!s || !s.sid) throw new Error('로그인이 필요합니다');
+    const a = this._surveyNode(cid).node.answers[s.sid];
+    return a ? Object.assign({ aid: s.sid }, a) : null;
   }
 
-  async submitSurveyAnswer(cid, sid, pin, payload) {
+  async submitSurveyAnswer(cid, payload) {
     const s = this.session;
-    if (!s) throw new Error('로그인이 필요합니다');
-    const sidOk = assertSid(sid);
-    const pinOk = assertPin(pin);
+    if (!s || !s.sid) throw new Error('로그인이 필요합니다');
+    const sidOk = assertSid(s.sid);
     const ctx = this._surveyNode(cid);
     const n = ctx.node;
     const cfg = normalizeSurveyConfig(n.config);
     const name = (n.roster.students || {})[sidOk];
     if (!name) throw surveyDenied('명렬표에 없는 학번입니다');
-    if ((n.rosterPins.pins || {})[sidOk] !== pinOk) throw surveyDenied('PIN이 맞지 않습니다');
     if (cfg.closed) throw surveyDenied('설문이 마감되었습니다');
 
-    const aid = answerDocId(sidOk, pinOk);
-    const prev = n.answers[aid] || null;
-    const groupNo = prev ? prev.groupNo : s.groupNo;
+    // groupNo는 **지금 대응표**를 기준으로 쓴다. 규칙이 `groupNo == groupOf()`로 대조하므로
+    // 로그인 시점의 값을 그대로 쓰면 그 사이 모둠이 바뀐 학생의 제출이 서버에서 거부된다.
+    // 미배정이면 ''이고, 규칙 쪽 groupOf()도 ''라 통과한다(§3-0 ⑻ A-10).
+    const groupNo = String((n.membership.bySid || {})[sidOk] || '');
+    const prev = n.answers[sidOk] || null;
     const body = buildAnswerBody(sidOk, name, groupNo, (payload || {}).answers);
     const now = new Date().toISOString();
-    n.answers[aid] = Object.assign(body, {
+    n.answers[sidOk] = Object.assign(body, {
       submittedAt: prev ? prev.submittedAt : now,
       updatedAt: now
     });
     this._write(ctx.store);
-    return { aid: aid, updated: !!prev };
+    return { aid: sidOk, updated: !!prev };
   }
 
   // 교사 전용. 학생 화면은 목록을 시도하지 않는다(§5 금지 8c).
   async listSurveyAnswers(cid) {
     const answers = this._surveyNode(cid).node.answers || {};
     return Object.keys(answers).sort().map(function (aid) {
-      return Object.assign({ aid: aid, sid: sidOfAnswerId(aid) }, answers[aid]);
+      return Object.assign({ aid: aid, sid: aid }, answers[aid]);
     });
   }
 
   // ── 구독 ────────────────────────────────────────────────────────────────
-  onGroup(cb) {
+  // onError는 계약 맞춤용이다(재작업 D-1). 데모 모드에는 서버도 규칙도 없어 구독이
+  // 끊길 일이 없으므로 **한 번도 불리지 않는다** — 그래서 D-1은 데모로 재현 불가다.
+  onGroup(cb, onError) {   // eslint-disable-line no-unused-vars
     const self = this;
     this._subs.push(cb);
     this.getState().then(function (st) { if (st) cb(st); });
@@ -862,30 +1022,46 @@ class MockDB {
   get admin() {
     const self = this;
     return {
-      // 비파괴(S-검토 A-5). 계정이 이미 있으면 거부하고(실서버의 auth/email-already-in-use 대응),
-      // 계정만 지워진 재발급 상황에서는 모둠 문서의 course·done을 **건드리지 않는다.**
-      async createGroup(classId, groupNo, password, course) {
+      // 모둠은 이제 **계정이 없는 순수 Firestore 문서**다(§3-0 ⑷). 비밀번호·보조 App·Auth
+      // 호출이 전부 사라졌고, 그래서 재실행이 안전하다 — 이미 있으면 course·done을
+      // 건드리지 않고 reissued:true로 알린다(비파괴, S-검토 A-5 승계).
+      async createGroup(classId, groupNo, course) {
         const gid = pad2(groupNo);
         const s = self._ensureStore();
         if (!s.classes[classId]) s.classes[classId] = { classId: classId, name: classLabels[classId] || classId, courseRev: 1 };
         if (!s.groups[classId]) s.groups[classId] = {};
-        s.demoAuth = s.demoAuth || {};
-        if (s.demoAuth[classId + '/' + gid]) throw new Error('이미 있는 모둠입니다');
         const existing = s.groups[classId][gid];
         if (existing) {
           existing.groupNo = gid;
-          existing.email = groupEmail(classId, gid);
         } else {
           s.groups[classId][gid] = {
-            gid: gid, groupNo: gid, email: groupEmail(classId, gid),
+            gid: gid, groupNo: gid,
             courseRev: s.classes[classId].courseRev,
             course: course || demoCourse(gid), done: {}, pending: {}, lastSyncAt: null
           };
         }
-        s.demoAuth[classId + '/' + gid] = String(password);
         self._write(s);
         self._emit();
-        return { gid: gid, email: groupEmail(classId, gid), reissued: !!existing };
+        return { gid: gid, reissued: !!existing };
+      },
+
+      // 학생 1명의 PIN을 새로 뽑고 계정을 다시 만든다(§3-0 ⑸ ⓑ 「학생 계정 재발급」).
+      // PIN 값은 **돌려주지 않는다** — 화면이 뿌리는 값의 출처는 언제나 getRosterPins 재독이다.
+      // 데모 모드에서는 대장의 이메일만 다시 적는다(계정 삭제·재생성이 없다).
+      async reissueStudentPin(cid, sid) {
+        const sidOk = assertSid(sid);
+        const ctx = self._surveyNode(cid);
+        if (!(ctx.node.roster.students || {})[sidOk]) throw new Error('명렬표에 없는 학번입니다');
+        const pins = Object.assign({}, ctx.node.rosterPins.pins || {});
+        delete pins[sidOk];
+        const merged = mergeRosterPins(pins, [sidOk]);
+        ctx.node.rosterPins = { pins: merged.pins };
+        self._write(ctx.store);
+        const store = self._ensureStore();
+        if (!store.studentAuth) store.studentAuth = {};
+        store.studentAuth[cid + '/' + sidOk] = studentEmail(cid, sidOk);
+        self._write(store);
+        return { sid: sidOk, failed: false };
       },
 
       async updateCourse(classId, gid, course) {
@@ -1019,7 +1195,7 @@ class MockDB {
     const s = this.session;
     let pendingCount = 0;
     let failedCount = 0;
-    if (s) {
+    if (hasGroup(s)) {
       const g = this._group(s.classId, s.gid);
       pendingCount = g ? Object.keys(g.pending || {}).length : 0;
       failedCount = (await vault.listFor(s.classId, s.gid)).length;
@@ -1056,6 +1232,7 @@ class FirebaseDB {
     this._cachedCourse = null;
     this._pendingKeys = {};
     this._revMismatch = false;       // 서버 courseRev와 캐시본이 어긋났고 자가 재캐시도 실패한 상태(A-3)
+    this._initPromise = null;        // 진행 중인 init() 1개 (아래 init 주석 — 동시 호출 방어)
   }
 
   async _loadSdk() {
@@ -1067,11 +1244,42 @@ class FirebaseDB {
   }
 
   // useMemoryCache=true 는 「메모리 캐시로 계속하기」 선택지에서만 넘어온다(§2-8).
-  async init(useMemoryCache) {
+  //
+  // **동시 호출 방어(진행 중 프라미스 캐시).** ensureReady()의 `if (this.fs) return` 가드는
+  // 초기화가 **끝난 뒤**에만 성립한다. `_loadSdk()`가 gstatic 3모듈을 받는 몇 초(느린 학교망)
+  // 사이에 두 번째 호출이 들어오면 둘 다 가드를 통과하고, 두 번째 `initializeFirestore()`가
+  // 「already been called with different options」로 던진다. 그 예외는 아래 catch에서
+  // kind:'persistence'로 감싸여 화면에 「지속 캐시를 초기화하지 못했습니다」라는 **엉뚱한
+  // 진단**으로 뜬다(실제로는 지속 캐시와 무관하다). 실사용 재현 경로: SDK 내려받는 중 교사가
+  // 로그인 제출. 그래서 진행 중인 프라미스를 하나만 두고 뒤따르는 호출은 그것을 기다린다.
+  // 실패하면 캐시를 비운다 — 재시도(§2-8 「다시 시도」)가 막히지 않아야 한다.
+  init(useMemoryCache) {
+    if (this._initPromise) return this._initPromise;
+    const self = this;
+    this._initPromise = this._initOnce(useMemoryCache).catch(function (e) {
+      self._initPromise = null;
+      throw e;
+    });
+    return this._initPromise;
+  }
+
+  async _initOnce(useMemoryCache) {
     const sdk = await this._loadSdk();
     this.app = sdk.app.initializeApp(firebaseConfig);
     this.auth = sdk.auth.getAuth(this.app);
     await sdk.auth.setPersistence(this.auth, sdk.auth.browserLocalPersistence);
+
+    // 인증 복원을 **기다린다**(재작업 D-3). setPersistence만으로는 저장된 세션이 아직
+    // this.auth.currentUser에 올라오지 않은 순간이 있다. 그 창에서 콜드 로드(북마크 직접
+    // 열기·복원 전 새로고침)한 survey/mission이 boot의 첫 서버 읽기(getRoster 등)를 내면
+    // 무인증 요청이 되어 규칙에 거부되고, survey가 그걸 「명렬표 미등록」으로 굳힌다.
+    // authStateReady()는 초기 인증 상태가 확정된 뒤 resolve한다 — 로그인 흐름에선 이미
+    // 확정돼 있어 즉시 통과하므로 회귀가 없다(구버전 SDK 방어로 존재 여부만 본다).
+    // 여기는 auth 준비 지점일 뿐 S검토 D절(오프라인 큐·_revMismatch·vault·_settlePending)과
+    // 무관하다(A-verify 확인).
+    if (typeof this.auth.authStateReady === 'function') {
+      try { await this.auth.authStateReady(); } catch (ignored) { /* 복원 실패는 무인증으로 진행 */ }
+    }
 
     if (useMemoryCache) {
       this.fs = sdk.fs.initializeFirestore(this.app, { localCache: sdk.fs.memoryLocalCache() });
@@ -1121,18 +1329,43 @@ class FirebaseDB {
     return this.init(useMemory);
   }
 
-  async login(classId, groupNo, password) {
+  // 개별 PIN 로그인 (§3-0 ⑵ 절차 그대로):
+  //   signIn → survey/membership 읽기 → gid 결정(부재·미등재면 '') → survey/roster 읽기 →
+  //   name 결정 → gid가 비어 있지 않으면 모둠 문서 읽고 코스 캐시.
+  // 반 등재 대조는 MockDB와 같은 자리에서 한다(재검 N-8 — 두 모드의 동작을 일치시킨다).
+  async login(classId, sid, pin) {
     const sdk = await this._loadSdk();
-    const gid = pad2(groupNo);
-    const email = groupEmail(classId, gid);
+    if (classIds.indexOf(classId) < 0) throw new Error(CREDENTIAL_ERROR_TEXT);
+    if (!isSid(String(sid || '').trim()) || !isPin(String(pin || '').trim())) {
+      throw new Error(CREDENTIAL_ERROR_TEXT);
+    }
+    const sidOk = String(sid).trim();
+    const email = studentEmail(classId, sidOk);
     try {
-      await sdk.auth.signInWithEmailAndPassword(this.auth, email, password);
+      await sdk.auth.signInWithEmailAndPassword(this.auth, email, studentPassword(sidOk, String(pin).trim()));
     } catch (e) {
       throw new Error(loginErrorText(e && e.code));
     }
-    this.session = { classId: classId, gid: gid, groupNo: gid, email: email };
+    // 신원이 확정된 뒤에야 서버를 읽는다. 여기부터는 자격 오류가 아니라 데이터 상태 문제다.
+    this.session = { classId: classId, sid: sidOk, name: '', gid: '', groupNo: '', email: email };
+
+    const mem = await this.getMembership(classId);
+    const gid = String((mem.bySid || {})[sidOk] || '');
+    const roster = await this.getRoster(classId);
+    this.session.name = (roster.students || {})[sidOk] || '';
+
+    if (!gid) return this.getState();       // 미배정 — 모둠 문서를 읽지 않는다(§3-0 ⑵-b)
+
+    this.session.gid = gid;
+    this.session.groupNo = gid;
     const snap = await sdk.fs.getDoc(this._groupRef());
-    if (!snap.exists()) throw new Error(CREDENTIAL_ERROR_TEXT);
+    if (!snap.exists()) {
+      // 대응표는 이 모둠을 가리키는데 모둠 문서가 없다 — 자격 문제가 아니라 구성 오류다.
+      // 미배정과 같은 화면으로 내려 설문은 살린다.
+      this.session.gid = '';
+      this.session.groupNo = '';
+      return this.getState();
+    }
     const g = snap.data();
     this._writeCourseCache(g.course || [], g.courseRev);
     return this.getState();
@@ -1141,7 +1374,7 @@ class FirebaseDB {
   // 코스 캐시를 한 곳에서만 쓴다 — 로그인·자가 재캐시가 같은 경로를 지난다(A-3).
   _writeCourseCache(course, courseRev) {
     const s = this.session;
-    if (!s) return false;
+    if (!hasGroup(s)) return false;
     this._cachedCourse = { course: course || [], courseRev: courseRev };
     if (courseRev != null) s.courseRev = courseRev;
     try {
@@ -1182,7 +1415,7 @@ class FirebaseDB {
 
   _reconcileRev(g, metadata) {
     const s = this.session;
-    if (!s) return;
+    if (!hasGroup(s)) return;
     this._settlePending(g, metadata);
     if (!g || g.courseRev == null) return;
     const cachedRev = this._cachedCourse ? this._cachedCourse.courseRev : s.courseRev;
@@ -1259,7 +1492,7 @@ class FirebaseDB {
   // 같은 키를 localStorage에도 남긴다(mission.html의 operationId와 같은 패턴).
   _pendingStoreKey() {
     const s = this.session;
-    return s ? 'dku:pending:' + s.classId + '/' + s.gid : null;
+    return hasGroup(s) ? 'dku:pending:' + s.classId + '/' + s.gid : null;
   }
 
   _readPersistedPending() {
@@ -1323,28 +1556,35 @@ class FirebaseDB {
     return true;
   }
 
+  // 미배정 세션에서 부르면 경로 조각이 빈 문자열이라 SDK가 예외를 던진다. 던지기 전에
+  // 우리 말로 막는다 — 호출자는 전부 hasGroup() 가드를 통과한 뒤에만 여기에 온다(§3-0 ⑵-b).
+  _assertGroup() {
+    if (!hasGroup(this.session)) throw new Error(NO_GROUP_TEXT);
+    return this.session;
+  }
+
   _groupRef() {
     const sdk = this.sdk;
-    const s = this.session;
+    const s = this._assertGroup();
     return sdk.fs.doc(this.fs, 'classes', s.classId, 'groups', s.gid);
   }
 
   _photoRef(locIndex) {
     const sdk = this.sdk;
-    const s = this.session;
+    const s = this._assertGroup();
     return sdk.fs.doc(this.fs, 'classes', s.classId, 'groups', s.gid, 'photos', String(locIndex));
   }
 
   _metaRef(locIndex) {
     const sdk = this.sdk;
-    const s = this.session;
+    const s = this._assertGroup();
     return sdk.fs.doc(this.fs, 'classes', s.classId, 'groups', s.gid, 'photoMeta', String(locIndex));
   }
 
   // 오프라인에서도 캐시된 코스를 돌려준다. courseRev가 어긋나면 재로그인을 유도한다.
   getCachedCourse() {
     const s = this.session;
-    if (!s) return null;
+    if (!hasGroup(s)) return null;
     if (this._cachedCourse) {
       return {
         course: this._cachedCourse.course,
@@ -1361,17 +1601,30 @@ class FirebaseDB {
     } catch (e) { return null; }
   }
 
+  // 미배정 세션도 **상태를 돌려준다**(null이 아니다). MockDB와 같은 모양이다(§1-1 #14).
+  _emptyState() {
+    const s = this.session;
+    return {
+      classId: s.classId, sid: s.sid, name: s.name, email: s.email,
+      gid: '', groupNo: '',
+      course: [], courseRev: null, revMismatch: false,
+      done: {}, pending: {}, failed: [], lastSyncAt: null
+    };
+  }
+
   async getState() {
     const sdk = await this._loadSdk();
     const s = this.session;
     if (!s) return null;
+    if (!hasGroup(s)) return this._emptyState();
     const snap = await sdk.fs.getDoc(this._groupRef());
     const g = snap.exists() ? snap.data() : {};
     this._reconcileRev(g, snap.metadata);        // 서버 rev 실비교 + 자가 재캐시 (A-3) + 대기 키 청소 (B-9)
     const failed = await vault.listFor(s.classId, s.gid);
     const cached = this.getCachedCourse();
     return {
-      classId: s.classId, gid: s.gid, groupNo: g.groupNo || s.gid,
+      classId: s.classId, sid: s.sid, name: s.name, email: s.email,
+      gid: s.gid, groupNo: g.groupNo || s.gid,
       course: (cached && cached.course) || g.course || [],
       courseRev: g.courseRev,
       revMismatch: this._revMismatch === true,
@@ -1394,6 +1647,7 @@ class FirebaseDB {
     const sdk = await this._loadSdk();
     const s = this.session;
     if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
     assertPureBase64(fullB64);
     assertPureBase64(thumbB64);
     assertPayloadSize(fullB64, thumbB64);
@@ -1465,6 +1719,7 @@ class FirebaseDB {
   async retryFailed(locIndex) {
     const s = this.session;
     if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
     const rows = await vault.listFor(s.classId, s.gid);
     const row = rows.filter(function (r) { return r.locIndex === locIndex; })[0];
     if (!row) throw new Error('보관된 사진이 없습니다');
@@ -1474,14 +1729,14 @@ class FirebaseDB {
 
   async listFailed() {
     const s = this.session;
-    if (!s) return [];
+    if (!hasGroup(s)) return [];
     return vault.listFor(s.classId, s.gid);
   }
 
   async listMyPhotos() {
     const sdk = await this._loadSdk();
     const s = this.session;
-    if (!s) return [];
+    if (!hasGroup(s)) return [];
     const state = await this.getState();
     const failedRows = await vault.listFor(s.classId, s.gid);
     const out = [];
@@ -1582,10 +1837,11 @@ class FirebaseDB {
     return out;
   }
 
-  // ── 사후 설문 (설문 v1 §3 단계 1) ───────────────────────────────────────
-  // 문서 4종: survey/config · survey/roster · survey/rosterPins(교사 전용) ·
-  // surveyAnswers/{sid}-{pin}. 학생은 목록을 시도하지 않는다(§5 금지 8c) —
-  // 목록이 열리면 문서 id에 실린 PIN이 통째로 샌다.
+  // ── 사후 설문 (설문 v1 §3 단계 1 · 로그인모둠개편 §3-0 ⑶) ────────────────
+  // 문서 5종: survey/config · survey/roster · survey/rosterPins(교사 전용) ·
+  // survey/membership(모둠 대응표) · surveyAnswers/{sid}.
+  // 문서 id에서 PIN이 사라졌다 — 신원이 Auth로 확정되므로 「경로 비밀」이 불요해졌고,
+  // PIN 노출면이 줄었다. 학생 목록 시도는 여전히 하지 않는다(§5 금지 8c).
   _surveyRef(cid, docId) {
     return this.sdk.fs.doc(this.fs, 'classes', cid, SURVEY_COLLECTION, docId);
   }
@@ -1602,8 +1858,17 @@ class FirebaseDB {
   }
 
   // 등록·재등록 공통 경로. 기존 학번의 PIN을 보존하고 신규 학번에만 발급한다(§5 금지 8d).
-  // rosterPins는 교사 전용 문서다 — roster에는 pins를 싣지 않는다(§5 금지 8b).
-  async saveRoster(cid, students) {
+  // rosterPins는 교사 전용 문서다 — roster에는 pins를 싣지 않는다(§5 금지 5).
+  //
+  // **뒤이어 학생 Auth 계정을 순차 생성한다**(§3-0 ⑷). 보조 App 사슬은 구 createGroup에서
+  // 이식한 것이고(확정 15′-⑷), 사슬 자체는 그대로다 — 다른 점은 ⑴ 계정 하나가 아니라
+  // 명렬표 전원이고 ⑵ `email-already-in-use`가 오류가 아니라 「기존」 계수라는 것뿐이다.
+  // 그래서 재실행이 안전하다(멱등). 보조 App은 **한 번만** 만들고 끝에 정리한다 —
+  // 학생마다 새로 만들면 30명분 앱 인스턴스가 쌓인다.
+  //
+  // 실패한 학번은 던지지 않고 failed 배열로 돌려준다. 한 명이 막혀 나머지 29명의 계정이
+  // 안 생기는 것이 더 나쁜 결과이고, 교사는 실패 목록만 보고 다시 누르면 된다.
+  async saveRoster(cid, students, onProgress) {
     const sdk = await this._loadSdk();
     const norm = normalizeRoster(students);
     const pinsSnap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.rosterPins));
@@ -1615,7 +1880,63 @@ class FirebaseDB {
     });
     batch.set(this._surveyRef(cid, SURVEY_DOC.rosterPins), { pins: merged.pins });
     await batch.commit();
-    return { count: norm.sids.length, kept: merged.kept, issued: merged.issued };
+
+    const accounts = await this._createStudentAccounts(cid, norm.sids, merged.pins, onProgress);
+    return {
+      count: norm.sids.length, kept: merged.kept, issued: merged.issued,
+      created: accounts.created, existed: accounts.existed, failed: accounts.failed
+    };
+  }
+
+  // 보조 App(inMemoryPersistence)로 학생 계정을 만든다. 교사 세션은 건드리지 않는다 —
+  // 기본 App에서 createUser를 부르면 방금 만든 학생으로 **로그인이 갈아 끼워진다**.
+  async _createStudentAccounts(cid, sids, pins, onProgress) {
+    const sdk = await this._loadSdk();
+    const secondary = sdk.app.initializeApp(firebaseConfig, 'secondary-' + Date.now());
+    const secAuth = sdk.auth.getAuth(secondary);
+    const out = { created: 0, existed: 0, failed: [] };
+    try {
+      await sdk.auth.setPersistence(secAuth, sdk.auth.inMemoryPersistence);
+      for (let i = 0; i < sids.length; i += 1) {
+        const sid = sids[i];
+        const pin = pins[sid];
+        try {
+          await sdk.auth.createUserWithEmailAndPassword(
+            secAuth, studentEmail(cid, sid), studentPassword(sid, pin)
+          );
+          out.created += 1;
+        } catch (e) {
+          if (e && e.code === 'auth/email-already-in-use') out.existed += 1;
+          else out.failed.push(sid);
+        }
+        if (onProgress) onProgress(i + 1, sids.length, sid);
+      }
+    } finally {
+      try { await sdk.auth.signOut(secAuth); } catch (ignored) { /* 무시 */ }
+      try { await sdk.app.deleteApp(secondary); } catch (ignored) { /* 무시 */ }
+    }
+    return out;
+  }
+
+  // ── 모둠 대응표 (§3-0 ⑶ — 신설) ────────────────────────────────────────
+  // 학생도 읽는다(기존 /survey/{doc} 블록에 자연 포함 — rosterPins만 제외된다).
+  // 쓰기는 교사뿐이다.
+  async getMembership(cid) {
+    const sdk = await this._loadSdk();
+    const snap = await sdk.fs.getDoc(this._surveyRef(cid, SURVEY_DOC.membership));
+    const d = snap.exists() ? (snap.data() || {}) : {};
+    return { bySid: d.bySid || {}, updatedAt: d.updatedAt || null };
+  }
+
+  // 문서를 **통째로** 다시 쓴다(merge 아님). 모둠에서 빠진 학생의 키가 남으면 그 학생이
+  // 없어진 모둠에 묶여 미션 화면이 빈 채로 뜬다 — 화면이 보여 준 구성이 그대로 정본이다.
+  async saveMembership(cid, bySid) {
+    const sdk = await this._loadSdk();
+    const norm = normalizeMembership(bySid);
+    await sdk.fs.setDoc(this._surveyRef(cid, SURVEY_DOC.membership), {
+      bySid: norm, updatedAt: sdk.fs.serverTimestamp()
+    });
+    return { count: Object.keys(norm).length };
   }
 
   async getRosterPins(cid) {
@@ -1644,37 +1965,39 @@ class FirebaseDB {
     return this.getSurveyConfig(cid);
   }
 
-  // PIN이 틀리면 문서 주소가 달라져 읽히지 않는다. 거부도 조용히 null이다(추정 ③-d) —
-  // 「PIN 틀림」과 「미제출」을 구분해 알려주면 그 응답 자체가 PIN 확인 채널이 된다.
-  async getSurveyAnswer(cid, sid, pin) {
+  // 내 응답 1건. 신원은 세션이 갖는다 — 규칙의 `own`(역방향 이메일 조립)이 서버에서
+  // 같은 판정을 한다. 거부는 조용히 null이다(화면이 「없음」과 같은 길로 간다).
+  async getSurveyAnswer(cid) {
     const sdk = await this._loadSdk();
-    const aid = answerDocId(sid, pin);
+    const s = this.session;
+    if (!s || !s.sid) throw new Error('로그인이 필요합니다');
     try {
-      const snap = await sdk.fs.getDoc(this._answerRef(cid, aid));
-      return snap.exists() ? Object.assign({ aid: aid }, snap.data()) : null;
+      const snap = await sdk.fs.getDoc(this._answerRef(cid, s.sid));
+      return snap.exists() ? Object.assign({ aid: s.sid }, snap.data()) : null;
     } catch (e) {
       if (e && e.code === SURVEY_DENIED_CODE) return null;
       throw e;
     }
   }
 
-  // 학생 경로. rosterPins를 읽지 않는다(읽을 수 없다) — PIN 대조는 규칙이 서버에서 한다.
-  // 틀린 PIN은 읽기에서 조용하고 **쓰기에서 permission-denied로 터진다**. 화면은 그 코드를
-  // PIN 오류로 안내하고 작성 내용을 기기에 보존한다(§3 단계 2).
-  async submitSurveyAnswer(cid, sid, pin, payload) {
+  // 학생 경로. rosterPins를 읽지 않는다(읽을 수 없다). 이름·모둠 위조는 규칙이 막는다 —
+  // 여기서 보내는 값이 서버의 roster·membership과 다르면 permission-denied가 된다.
+  async submitSurveyAnswer(cid, payload) {
     const sdk = await this._loadSdk();
     const s = this.session;
-    if (!s) throw new Error('로그인이 필요합니다');
-    const sidOk = assertSid(sid);
-    const pinOk = assertPin(pin);
+    if (!s || !s.sid) throw new Error('로그인이 필요합니다');
+    const sidOk = assertSid(s.sid);
     const roster = await this.getRoster(cid);
     const name = (roster.students || {})[sidOk];
     if (!name) throw surveyDenied('명렬표에 없는 학번입니다');
 
-    const aid = answerDocId(sidOk, pinOk);
-    const ref = this._answerRef(cid, aid);
-    const prev = await this.getSurveyAnswer(cid, sidOk, pinOk);
-    const groupNo = prev ? prev.groupNo : s.groupNo;
+    // groupNo는 **지금 대응표**를 기준으로 쓴다(규칙 create/update가 `groupOf()`와 대조한다).
+    // 로그인 뒤 교사가 모둠을 바꾼 학생이 여기서 거부되지 않게 하는 자리다. 미배정은 ''.
+    const mem = await this.getMembership(cid);
+    const groupNo = String((mem.bySid || {})[sidOk] || '');
+
+    const ref = this._answerRef(cid, sidOk);
+    const prev = await this.getSurveyAnswer(cid);
     const body = buildAnswerBody(sidOk, name, groupNo, (payload || {}).answers);
     body.updatedAt = sdk.fs.serverTimestamp();
     if (prev) {
@@ -1683,22 +2006,32 @@ class FirebaseDB {
       body.submittedAt = sdk.fs.serverTimestamp();
       await sdk.fs.setDoc(ref, body);
     }
-    return { aid: aid, updated: !!prev };
+    return { aid: sidOk, updated: !!prev };
   }
 
-  // 교사 전용. 규칙에서 list는 isTeacher()만 통과한다.
+  // 교사 전용. 규칙에서 list는 isTeacher()만 통과한다. 문서 id가 곧 학번이다.
   async listSurveyAnswers(cid) {
     const sdk = await this._loadSdk();
     const snap = await sdk.fs.getDocs(sdk.fs.collection(this.fs, 'classes', cid, SURVEY_ANSWERS_COLLECTION));
     return snap.docs.map(function (d) {
-      return Object.assign({ aid: d.id, sid: sidOfAnswerId(d.id) }, d.data());
+      return Object.assign({ aid: d.id, sid: d.id }, d.data());
     }).sort(function (a, b) { return String(a.aid) < String(b.aid) ? -1 : 1; });
   }
 
-  onGroup(cb) {
+  // onError는 선택 인자다(재작업 D-1). 리스너가 **끊길 때** 한 번 불린다 —
+  // 붙이지 않으면 SDK가 `Uncaught Error in snapshot listener`로 콘솔에 던지고,
+  // 화면은 옛 모둠 상태로 얼어붙은 채 아무 안내도 못 띄운다.
+  onGroup(cb, onError) {
     const sdk = this.sdk;
     if (!sdk || !this.fs) throw new Error('ensureReady()를 먼저 호출해야 합니다');
     const self = this;
+    // 미배정은 구독할 모둠 문서가 없다. 빈 상태를 한 번 흘리고 해지 함수를 돌려준다 —
+    // 여기서 던지면 미션 화면 전체가 뜨지 않는다(§3-0 ⑵-b).
+    if (!hasGroup(this.session)) {
+      const st = this._emptyState();
+      Promise.resolve().then(function () { cb(st); });
+      return function () { /* 구독한 것이 없다 */ };
+    }
     return sdk.fs.onSnapshot(this._groupRef(), { includeMetadataChanges: true }, function (snap) {
       const g = snap.exists() ? snap.data() : {};
       // 구독 중 판이 바뀌어도 여기서 잡는다(A-3). 새로고침 뒤 mutation queue가 스스로
@@ -1708,7 +2041,10 @@ class FirebaseDB {
       vault.listFor(self.session.classId, self.session.gid).then(function (failed) {
         const cached = self.getCachedCourse();
         cb({
-          classId: self.session.classId, gid: self.session.gid, groupNo: g.groupNo || self.session.gid,
+          // 신원 3필드는 getState()와 **같은 모양**이다 — 화면이 두 경로를 갈라 쓰지 않게 한다.
+          classId: self.session.classId, sid: self.session.sid,
+          name: self.session.name, email: self.session.email,
+          gid: self.session.gid, groupNo: g.groupNo || self.session.gid,
           course: (cached && cached.course) || g.course || [],
           courseRev: g.courseRev,
           revMismatch: self._revMismatch === true,
@@ -1719,6 +2055,18 @@ class FirebaseDB {
           lastSyncAt: snap.metadata.fromCache ? null : new Date().toISOString()
         });
       });
+    }, function (err) {
+      // 리스너가 끊겼다. Firestore는 이 뒤로 **다시 부르지 않는다** — 화면이 스스로
+      // 알아차릴 방법이 이 콜백뿐이다.
+      //
+      // permission-denied의 정상 운영 경로: 학생이 접속 중일 때 교사가 모둠 구성을 바꾸면
+      // 이 학생은 옛 모둠 문서의 독자 자격을 잃는다(규칙 isGroupMember). 재구독으로 자가
+      // 복구할 수 없다 — 세션의 gid 자체가 낡았기 때문이다. 그래서 재로그인을 안내한다.
+      //
+      // ⚠ 여기서 _revMismatch·vault·_settlePending을 건드리지 않는다. 그 셋은 「코스 판
+      // 불일치」와 「미전송 사진 보존」의 의미론이고, 권한 상실은 둘 중 어느 것도 아니다
+      // (S검토 D절 보존 계약 — 의미를 겹쳐 쓰면 미전송 경고가 오작동한다).
+      if (typeof onError === 'function') onError(err);
     });
   }
 
@@ -1752,11 +2100,19 @@ class FirebaseDB {
                 return { locIndex: v.locIndex, thumb: v.thumb, mime: v.mime, uploadedAt: v.uploadedAt };
               }).sort(function (a, b) { return a.locIndex - b.locIndex; });
               emit();
+            },
+            function () {
+              // 교사 화면은 조용히 삼킨다(재작업 D-1 처방 3). 교사가 이 구독의 권한을
+              // 잃는 경우는 **로그아웃·세션 만료뿐**이고, 그때는 화면 전체가 로그인
+              // 카드로 돌아가므로 여기서 따로 안내할 것이 없다. 콜백을 아예 안 붙이면
+              // SDK가 uncaught로 콘솔에 던지므로, 빈 콜백이 곧 처방이다.
             }
           ));
         }
       });
       emit();
+    }, function () {
+      // 〃 교사 화면은 조용히 삼킨다(재작업 D-1 처방 3). 권한 상실 = 로그아웃 상황뿐.
     });
     return function () {
       unsub();
@@ -1767,48 +2123,52 @@ class FirebaseDB {
   get admin() {
     const self = this;
     return {
-      // 확정 15′-⑷ 사슬: 보조 App(inMemoryPersistence)로 createUser →
-      // 교사 세션으로 모둠 문서 기록 → 실패 시 방금 만든 사용자 삭제 시도 →
-      // finally signOut · deleteApp.
-      async createGroup(classId, groupNo, password, course) {
+      // 모둠은 이제 **계정이 없는 순수 Firestore 문서**다(§3-0 ⑷). 보조 App 사슬·비밀번호
+      // 인자·email 필드가 전부 사라졌다 — 그 사슬은 saveRoster의 학생 계정 생성으로 옮겼다.
+      //
+      // ⚠ `classes/{cid}` 문서의 {classId, courseRev} 보장 merge 쓰기는 **불변이다**(A-8 치명).
+      // 보안 규칙의 revOk()/classRev()가 이 문서를 get()하므로, 없으면 학생 쓰기가 전량
+      // 거부된다. 하위 컬렉션을 써도 부모 문서는 생기지 않는다 — 여기가 유일한 생성 지점이다.
+      async createGroup(classId, groupNo, course) {
         const sdk = await self._loadSdk();
         const gid = pad2(groupNo);
-        const email = groupEmail(classId, gid);
-        const secondary = sdk.app.initializeApp(firebaseConfig, 'secondary-' + Date.now());
-        const secAuth = sdk.auth.getAuth(secondary);
-        let created = null;
-        try {
-          await sdk.auth.setPersistence(secAuth, sdk.auth.inMemoryPersistence);
-          const cred = await sdk.auth.createUserWithEmailAndPassword(secAuth, email, password);
-          created = cred.user;
-          const clsRef = sdk.fs.doc(self.fs, 'classes', classId);
-          const clsSnap = await sdk.fs.getDoc(clsRef);
-          const rev = clsSnap.exists() ? clsSnap.data().courseRev : 1;
-          // 반 문서를 **먼저 보장한다**(A-1). 보안 규칙의 revOk()가 이 문서를 get()하므로,
-          // 이 문서가 없으면 학생 쓰기가 전량 거부된다. 하위 컬렉션을 써도 부모 문서는 생기지 않는다.
-          await sdk.fs.setDoc(clsRef, { classId: classId, courseRev: rev }, { merge: true });
+        const clsRef = sdk.fs.doc(self.fs, 'classes', classId);
+        const clsSnap = await sdk.fs.getDoc(clsRef);
+        const rev = clsSnap.exists() ? clsSnap.data().courseRev : 1;
+        await sdk.fs.setDoc(clsRef, { classId: classId, courseRev: rev }, { merge: true });
 
-          // 비파괴(A-5). 이미 있는 모둠 문서는 계정 정보만 보정하고 course·done은 건드리지 않는다.
-          const gRef = sdk.fs.doc(self.fs, 'classes', classId, 'groups', gid);
-          const gSnap = await sdk.fs.getDoc(gRef);
-          if (gSnap.exists()) {
-            await sdk.fs.setDoc(gRef, { groupNo: gid, email: email }, { merge: true });
-          } else {
-            await sdk.fs.setDoc(gRef, {
-              groupNo: gid, email: email, courseRev: rev,
-              course: ensureSpotIds(course || []), done: {}, createdAt: sdk.fs.serverTimestamp()
-            });
-          }
-          return { gid: gid, email: email, reissued: gSnap.exists() };
-        } catch (e) {
-          if (created) {
-            try { await sdk.auth.deleteUser(created); } catch (ignored) { /* 보상 실패는 안내서 절차로 */ }
-          }
-          throw e;
-        } finally {
-          try { await sdk.auth.signOut(secAuth); } catch (ignored) { /* 무시 */ }
-          try { await sdk.app.deleteApp(secondary); } catch (ignored) { /* 무시 */ }
+        // 비파괴(A-5). 이미 있는 모둠 문서는 groupNo만 보정하고 course·done은 건드리지 않는다.
+        const gRef = sdk.fs.doc(self.fs, 'classes', classId, 'groups', gid);
+        const gSnap = await sdk.fs.getDoc(gRef);
+        if (gSnap.exists()) {
+          await sdk.fs.setDoc(gRef, { groupNo: gid }, { merge: true });
+        } else {
+          await sdk.fs.setDoc(gRef, {
+            groupNo: gid, courseRev: rev,
+            course: ensureSpotIds(course || []), done: {}, createdAt: sdk.fs.serverTimestamp()
+          });
         }
+        return { gid: gid, reissued: gSnap.exists() };
+      },
+
+      // 학생 1명의 PIN을 새로 뽑고 계정을 다시 만든다(§3-0 ⑸ ⓑ 「학생 계정 재발급」).
+      // 교사는 **먼저 콘솔에서 그 학생 Auth 계정을 지워야 한다** — 클라이언트에서는 남의
+      // 계정을 지울 수 없기 때문이다(서버 코드 없음). 안 지웠으면 email-already-in-use가
+      // 나고 failed:true로 돌려준다. 그 경우에도 PIN은 이미 새 값으로 바뀌어 있으므로,
+      // 화면은 「콘솔에서 지우고 한 번 더」를 안내한다(상태가 반쪽으로 남지 않게).
+      // PIN 값은 돌려주지 않는다 — 화면의 출처는 언제나 getRosterPins 재독이다.
+      async reissueStudentPin(cid, sid) {
+        const sdk = await self._loadSdk();
+        const sidOk = assertSid(sid);
+        const roster = await self.getRoster(cid);
+        if (!(roster.students || {})[sidOk]) throw new Error('명렬표에 없는 학번입니다');
+        const cur = await self.getRosterPins(cid);
+        const pins = Object.assign({}, cur.pins || {});
+        delete pins[sidOk];
+        const merged = mergeRosterPins(pins, [sidOk]);
+        await sdk.fs.setDoc(self._surveyRef(cid, SURVEY_DOC.rosterPins), { pins: merged.pins });
+        const out = await self._createStudentAccounts(cid, [sidOk], merged.pins, null);
+        return { sid: sidOk, failed: out.existed > 0 || out.failed.length > 0 };
       },
 
       async updateCourse(classId, gid, course) {
@@ -1966,7 +2326,7 @@ class FirebaseDB {
     let pendingCount = Object.keys(union).length;
 
     let hasPendingWrites = false;
-    if (s && this.fs) {
+    if (hasGroup(s) && this.fs) {
       try {
         const snap = await sdk.fs.getDocFromCache(this._groupRef());
         hasPendingWrites = !!(snap && snap.metadata && snap.metadata.hasPendingWrites);
@@ -1977,7 +2337,7 @@ class FirebaseDB {
     if (hasPendingWrites && pendingCount === 0) pendingCount = 1;
 
     let failedCount = 0;
-    if (s) failedCount = (await vault.listFor(s.classId, s.gid)).length;
+    if (hasGroup(s)) failedCount = (await vault.listFor(s.classId, s.gid)).length;
     const blocked = pendingCount + failedCount;
     if (blocked > 0 && !force) {
       return {

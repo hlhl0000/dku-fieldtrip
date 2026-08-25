@@ -496,10 +496,11 @@ loginForm.addEventListener('submit', async function (e) {
   try {
     await db.ensureReady();
     if (MODE === 'firebase') {
-      // db.js가 이미 만들어 둔 Auth 인스턴스를 그대로 쓴다(모둠 계정 로그인과 같은 프로젝트).
+      // db.js가 이미 만들어 둔 Auth 인스턴스를 그대로 쓴다(학생 계정 로그인과 같은 프로젝트).
       await db.sdk.auth.signInWithEmailAndPassword(db.auth, email, password);
       // getPhoto가 반 경로를 알아야 하므로 반 식별자만 세션에 남긴다.
-      db.session = { classId: classId, gid: null, groupNo: null, email: email };
+      // gid는 **빈 문자열**이다 — null 금지 계약을 교사 세션에서도 지킨다(§3-0 ❸).
+      db.session = { classId: classId, sid: '', name: '', gid: '', groupNo: '', email: email };
     } else if (email !== DEMO_TEACHER_EMAIL || password !== DEMO_TEACHER_PASSWORD) {
       throw new Error('교사 이메일 또는 비밀번호가 맞지 않습니다');
     }
@@ -537,7 +538,7 @@ document.getElementById('teacher-logout').addEventListener('click', async functi
     classSelect.value = saved.classId;
     // 서버 모드에서는 Auth persistence(local)가 세션을 되살린다. getPhoto가 쓸 반 식별자만 다시 채운다.
     if (MODE === 'firebase') {
-      db.session = { classId: saved.classId, gid: null, groupNo: null, email: saved.email };
+      db.session = { classId: saved.classId, sid: '', name: '', gid: '', groupNo: '', email: saved.email };
     }
     openDashboard(saved.classId);
   }

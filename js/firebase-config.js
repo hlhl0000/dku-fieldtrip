@@ -4,10 +4,10 @@
 // 이 파일에서만 바꾸는 값 3가지
 //   1) MODE          : "demo" 또는 "firebase" — 자동 전환하지 않는다(§5 금지 10)
 //   2) firebaseConfig: Firebase 콘솔에서 복사한 값 (MODE가 "firebase"일 때만 쓰인다)
-//   3) classIds      : 운영할 반 ID 목록 — 로그인 화면 드롭다운의 단일 원천
+//   3) classIds      : 운영할 반 ID 목록 — 학번에서 파생한 반 ID의 등재 대조 원천
 
 // 앱 셸 캐시 버전. 사이트 파일을 고치면 이 값을 올린다(서비스 워커가 캐시를 갈아낀다).
-export const APP_VERSION = 'v14';
+export const APP_VERSION = 'v15';
 
 // gstatic Firebase SDK 버전 — 이 상수 1곳에서만 조립한다(F-1, v3.1 §1-3 B-6).
 export const SDK_VERSION = '12.0.0';
@@ -16,13 +16,14 @@ export const SDK_VERSION = '12.0.0';
 export const MODE = 'firebase';
 
 // 반 ID 목록 — 인증 전에 Firestore를 읽지 않기 위한 클라이언트 상수(v3.1 §1-3, §5 금지 5 단서).
+// 로그인 화면은 학번 앞 3자리에서 반 ID를 파생한 뒤 이 배열에 있는지만 본다(§3-0 ⑸).
 // 반을 늘릴 때: 이 배열에 ID를 추가하고 관리 화면에서 그 반을 생성한다.
 export const classIds = ['1-4'];
 
 // 반 ID → 화면 표기 이름. 표기가 없으면 ID를 그대로 쓴다.
 export const classLabels = { '1-4': '1학년 4반' };
 
-// 데모 모드에서 쓰는 가상 프로젝트 ID(모둠 이메일 조립용). 실제 프로젝트가 아니다.
+// 데모 모드에서 쓰는 가상 프로젝트 ID(학생 계정 이메일 조립용). 실제 프로젝트가 아니다.
 export const DEMO_PROJECT_ID = 'demo-dku-fourcut';
 
 // Firebase 콘솔 → 프로젝트 설정 → 웹앱 → SDK 설정에서 복사해 붙여넣는다.
@@ -34,7 +35,7 @@ export const firebaseConfig = {
   appId: '1:1092062613691:web:94eee25f1f649b7bde199e'
 };
 
-// 지금 모드에서 모둠 이메일 조립에 쓸 프로젝트 ID.
+// 지금 모드에서 학생 계정 이메일 조립에 쓸 프로젝트 ID.
 export function activeProjectId() {
   return MODE === 'firebase' ? firebaseConfig.projectId : DEMO_PROJECT_ID;
 }

@@ -21,6 +21,8 @@
     overflow: hidden;
     border-radius: 8px;
     background: #000;
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 3px rgba(55, 44, 32, 0.18);
     touch-action: none;          /* 끌기 중 페이지가 함께 스크롤되지 않게 한다 */
     cursor: grab;
     user-select: none;
@@ -43,7 +45,7 @@
   }
   .adjust-controls { margin-top: 8px; }
   .adjust-controls .button-row { margin: 0 0 6px; }
-  .adjust-controls button[aria-pressed="true"] { outline: 3px solid #2f6fd0; }
+  .adjust-controls button[aria-pressed="true"] { outline: 3px solid var(--accent); }
   .adjust-scale { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
   .adjust-scale input[type="range"] { flex: 1 1 auto; min-width: 0; }
   .adjust-scale .adjust-scale-value { flex: 0 0 auto; min-width: 3.5em; text-align: right; }
@@ -54,7 +56,8 @@
     padding: 12px;
     border: 2px solid var(--accent);
     border-radius: 10px;
-    background: #eef2fb;
+    background: var(--cur-bg);
+    box-shadow: inset 0 0 0 3px rgba(179, 203, 199, 0.30);
   }
   .survey-cta-text { margin: 0 0 8px; font-size: 0.95rem; word-break: keep-all; }
 </style>
@@ -127,7 +130,10 @@ import {
   requireLogin, setText, el, clear, registerServiceWorker, statusText
 } from './js/common.js';
 
-const session = requireLogin();
+// 네컷은 모둠 사진이 재료다 — 미배정 학생에게는 만들 것이 없다. index로 튕기면
+// 로그인은 멀쩡한데 로그인 화면이 떠 혼란스러우므로 mission으로 보내고, 거기 안내가 뜬다
+// (§3-0 ⑵-b · 재검 N-4).
+const session = requireLogin({ needsGroup: true });
 const list = document.getElementById('pick-list');
 const countEl = document.getElementById('pick-count');
 const notEnough = document.getElementById('not-enough');
@@ -535,8 +541,9 @@ document.getElementById('save-newtab').addEventListener('click', function () {
   try {
     if (!db.session) {
       db.session = {
-        classId: session.classId, gid: session.gid,
-        groupNo: session.groupNo, courseRev: session.courseRev
+        classId: session.classId, sid: session.sid, name: session.name,
+        gid: session.gid, groupNo: session.groupNo,
+        email: session.email, courseRev: session.courseRev
       };
     }
     await db.ensureReady();

@@ -38,7 +38,7 @@ body.page-admin #app { max-width: 1040px; }
 }
 .course-row .course-spot button { width: auto; padding: 6px 10px; font-size: 13px; }
 .course-row .course-spot .spot-state { margin: 0; flex: 1 1 12em; min-width: 0; }
-#print-row button { flex: 0 0 160px; }
+#pin-print-row button { flex: 0 0 160px; }
 .inline-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
 .inline-row .field { flex: 0 0 200px; margin-bottom: 0; }
 .inline-row button { width: auto; }
@@ -110,14 +110,12 @@ body.page-admin #app { max-width: 1040px; }
 #survey-answer-body td { vertical-align: top; white-space: pre-wrap; word-break: break-word; }
 #survey-answer-body th { white-space: nowrap; }
 
+/* 인쇄 대상은 PIN 절취표 하나뿐이다 — 모둠 비밀번호 인쇄표는 폐기됐다(§5 폐기 구 계약).
+   화면 전체를 감추고 절취표 영역만 남긴다. */
 @media print {
   body * { visibility: hidden; }
-  #print-area, #print-area * { visibility: visible; }
-  #print-area { position: absolute; left: 0; top: 0; width: 100%; }
-  /* PIN 절취표를 인쇄할 때는 그 영역만 보인다. 두 표가 한 장에 섞이지 않는다. */
-  body.print-pins #print-area, body.print-pins #print-area * { visibility: hidden; }
-  body.print-pins #pin-print-area, body.print-pins #pin-print-area * { visibility: visible; }
-  body.print-pins #pin-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  #pin-print-area, #pin-print-area * { visibility: visible; }
+  #pin-print-area { position: absolute; left: 0; top: 0; width: 100%; }
 }
 </style>
 </head>
@@ -125,7 +123,7 @@ body.page-admin #app { max-width: 1040px; }
 <main id="app">
   <header class="app-header">
     <h1>관리 화면</h1>
-    <p class="sub">모둠 생성 · 코스 편집 · 프레임 문구 · 데이터 초기화</p>
+    <p class="sub">모둠 생성·구성 · 코스 편집 · 명렬표·PIN · 프레임 문구 · 데이터 초기화</p>
   </header>
 
   <p id="narrow-note" class="error">이 화면은 데스크톱(가로 768px 이상)에서 쓰도록 만들었습니다. 좁은 화면에서는 표가 접힙니다.</p>
@@ -148,8 +146,10 @@ body.page-admin #app { max-width: 1040px; }
     <!-- ── 1. 모둠 일괄 생성 ────────────────────────────────────────────── -->
     <section class="card">
       <h2 class="section-title">1. 모둠 일괄 생성</h2>
-      <p class="note">공개(URL 배포) 전에 여기서 모둠 계정을 한 번에 만듭니다. 나중에 만들면 주소를 미리 아는 사람이 먼저 계정을 차지할 수 있습니다.
-        비밀번호는 <strong>지금 이 화면에서만</strong> 보입니다. 인쇄하거나 적어 두세요. 서버에는 저장하지 않습니다.</p>
+      <p class="note">모둠 수만 정하면 빈 모둠이 그 수만큼 만들어집니다.
+        <strong>모둠에는 계정도 비밀번호도 없습니다</strong> — 학생은 각자 학번과 PIN으로 로그인하고,
+        어느 모둠에 속하는지는 아래 「1-2. 모둠 구성」이 정합니다.
+        이미 있는 번호는 코스·진행 기록을 그대로 두고 건너뜁니다.</p>
       <div class="inline-row">
         <div class="field">
           <label for="bulk-count">모둠 수 (1번부터)</label>
@@ -159,40 +159,71 @@ body.page-admin #app { max-width: 1040px; }
       </div>
       <p id="bulk-error" class="error" role="alert" hidden></p>
       <p id="bulk-msg" class="note" role="status"></p>
-
-      <div id="print-area" hidden>
-        <h3 class="section-title" id="print-title">모둠 비밀번호 인쇄표</h3>
-        <table class="pw-table" id="password-table">
-          <thead><tr><th>반</th><th>모둠</th><th>계정(이메일)</th><th>비밀번호</th></tr></thead>
-          <tbody id="password-body"></tbody>
-        </table>
-      </div>
-      <div class="button-row" id="print-row" hidden>
-        <button id="print-btn" type="button" class="secondary">인쇄</button>
-      </div>
     </section>
 
-    <!-- ── 1-1. 단일 모둠 계정 재발급 ───────────────────────────────────── -->
+    <!-- ── 1-1. 학생 계정 재발급 ────────────────────────────────────────── -->
     <section class="card">
-      <h2 class="section-title">1-1. 모둠 계정 재발급 (비밀번호 분실)</h2>
-      <p class="note">모둠 <strong>한 개</strong>의 계정만 새 비밀번호로 다시 만듭니다.
-        <strong>먼저</strong> Firebase 콘솔 → Authentication → Users 에서 그 모둠 계정을 삭제한 뒤 여기서 번호를 넣고 누르세요.
-        <strong>그 모둠의 코스와 진행 기록(완료한 장소)은 지워지지 않습니다.</strong> 사진도 그대로 남습니다.</p>
+      <h2 class="section-title">1-1. 학생 계정 재발급 (PIN 분실·로그인 불가)</h2>
+      <p class="note">학생 <strong>한 명</strong>의 PIN을 새로 뽑고 계정을 다시 만듭니다.
+        <strong>먼저</strong> Firebase 콘솔 → Authentication → Users 에서 <span id="reissue-email" class="pw"></span> 계정을 삭제한 뒤
+        여기서 학번을 넣고 누르세요. 콘솔에서 지우지 않으면 「이미 있는 계정」으로 걸려 새 PIN이 적용되지 않습니다.
+        <strong>그 학생의 모둠 배정·설문 응답은 지워지지 않습니다.</strong></p>
       <div class="inline-row">
         <div class="field">
-          <label for="reissue-no">모둠 번호</label>
-          <input id="reissue-no" type="number" min="1" max="30" value="1">
+          <label for="reissue-sid">학번 5자리</label>
+          <input id="reissue-sid" type="text" inputmode="numeric" maxlength="5" placeholder="예: 10401">
         </div>
-        <button id="reissue-btn" type="button" class="secondary">이 모둠만 재발급</button>
+        <button id="reissue-btn" type="button" class="secondary">이 학생만 재발급</button>
       </div>
       <p id="reissue-error" class="error" role="alert" hidden></p>
       <p id="reissue-msg" class="note" role="status"></p>
-      <div id="reissue-area" hidden>
-        <table class="pw-table" id="reissue-table">
-          <thead><tr><th>반</th><th>모둠</th><th>계정(이메일)</th><th>새 비밀번호</th></tr></thead>
-          <tbody id="reissue-body"></tbody>
-        </table>
+    </section>
+
+    <!-- ── 1-2. 모둠 구성 (§3-0 ⑸ ⓓ) ──────────────────────────────────── -->
+    <!-- 학생이 자율로 짠 모둠을 교사가 여기 입력한다. 입력은 **이름**이고, 명렬표와
+         자동 대조해 학번으로 바꾼다. 동명이인은 학번을 병기한 선택 팝업으로 가른다. -->
+    <section class="card" id="member-board">
+      <h2 class="section-title">1-2. 모둠 구성</h2>
+      <p class="note">모둠 탭을 고르고 <strong>구성원 이름</strong>을 줄바꿈이나 쉼표로 구분해 넣은 뒤 「이름 대조」를 누릅니다.
+        명렬표와 자동으로 맞춰 학번을 찾습니다. 같은 이름이 둘 이상이면 학번을 병기한 선택 팝업이 뜨고,
+        명렬표에 없는 이름은 아래에 「미해소」로 남습니다. 다 맞춘 뒤 「구성 저장」을 눌러야 서버에 기록됩니다.</p>
+      <p id="member-warn" class="survey-warn" hidden></p>
+
+      <div id="member-tabs" class="button-row"></div>
+
+      <div class="field">
+        <label for="member-text">이 모둠 구성원 이름</label>
+        <textarea id="member-text" rows="5" placeholder="홍길동&#10;김이름, 박아무개"></textarea>
       </div>
+      <div class="button-row">
+        <button id="member-match-btn" type="button" class="secondary">이름 대조</button>
+        <button id="member-clear-btn" type="button" class="secondary">이 모둠 비우기</button>
+      </div>
+      <p id="member-match-msg" class="note" role="status"></p>
+      <p id="member-error" class="error" role="alert" hidden></p>
+
+      <!-- 동명이인 선택 팝업 -->
+      <div id="member-dup-box" class="confirm-box" hidden>
+        <p class="error" id="member-dup-text"></p>
+        <div id="member-dup-list"></div>
+        <div class="button-row">
+          <button id="member-dup-cancel" type="button" class="secondary">취소</button>
+          <button id="member-dup-ok" type="button">선택 확정</button>
+        </div>
+      </div>
+
+      <h3 class="section-title">모둠별 확정 명단</h3>
+      <table class="pw-table">
+        <thead><tr><th>모둠</th><th>인원</th><th>구성원 (학번 이름)</th></tr></thead>
+        <tbody id="member-table-body"></tbody>
+      </table>
+      <p id="member-unassigned" class="note"></p>
+
+      <div class="button-row">
+        <button id="member-save-btn" type="button">구성 저장</button>
+        <button id="member-reload-btn" type="button" class="secondary">서버에서 다시 읽기</button>
+      </div>
+      <p id="member-save-msg" class="note" role="status"></p>
     </section>
 
     <!-- ── 2. 코스 편집 ─────────────────────────────────────────────────── -->
@@ -329,19 +360,21 @@ body.page-admin #app { max-width: 1040px; }
       <p id="reset-msg" class="note" role="status"></p>
     </section>
 
-    <!-- ── 5. 사후 설문 — 명렬표·PIN (설문 v1 §3 단계 3a) ────────────────── -->
+    <!-- ── 5. 명렬표·PIN·학생 계정 (설문 v1 §3 단계 3a · 로그인모둠개편 §3-0 ⑸ ⓒ) ── -->
     <section class="card">
-      <h2 class="section-title">5. 사후 설문 — 명렬표·PIN</h2>
+      <h2 class="section-title">5. 명렬표 · PIN · 학생 계정</h2>
       <p id="roster-warn" class="survey-warn" hidden>명렬표가 아직 등록되지 않았습니다.
-        학생 설문 화면은 명렬표를 등록해야 열립니다.</p>
+        학생 로그인과 설문 화면은 명렬표를 등록해야 열립니다.</p>
       <p class="note">「학번(탭 또는 공백)이름」을 한 줄에 한 사람씩 붙여넣으세요. 학번은 숫자 5자리입니다.
-        등록하면 학생마다 PIN 4자리가 자동으로 발급됩니다. 다시 등록해도 이미 있는 학번의 PIN은 바뀌지 않습니다.</p>
+        등록하면 학생마다 PIN 4자리가 발급되고 <strong>그 자리에서 학생 로그인 계정이 함께 만들어집니다</strong>.
+        다시 등록해도 이미 있는 학번의 PIN은 바뀌지 않고, 이미 있는 계정은 건너뜁니다(여러 번 눌러도 안전).
+        <strong>URL을 공개하기 전에</strong> 등록을 끝내세요 — 계정 주소가 학번에서 정해지므로 먼저 만들어 두어야 합니다.</p>
       <div class="field">
         <label for="roster-text">명렬표 붙여넣기</label>
         <textarea id="roster-text" rows="8" placeholder="10401&#9;홍길동&#10;10402&#9;김이름"></textarea>
       </div>
       <div class="button-row">
-        <button id="roster-save-btn" type="button">명렬표 등록</button>
+        <button id="roster-save-btn" type="button">명렬표 등록 · 계정 생성</button>
       </div>
       <div id="roster-confirm" class="confirm-box" hidden>
         <p class="error" id="roster-confirm-text"></p>
@@ -352,7 +385,9 @@ body.page-admin #app { max-width: 1040px; }
         </div>
       </div>
       <p id="roster-error" class="error" role="alert" hidden></p>
+      <p id="roster-progress" class="note" role="status"></p>
       <p id="roster-msg" class="note" role="status"></p>
+      <p id="roster-failed" class="survey-warn" hidden></p>
 
       <h3 class="section-title">PIN 조회 (분실 시)</h3>
       <div class="inline-row">
@@ -368,9 +403,10 @@ body.page-admin #app { max-width: 1040px; }
         <button id="pin-print-btn" type="button" class="secondary">PIN 절취표 인쇄</button>
       </div>
       <div id="pin-print-area" hidden>
-        <h3 class="section-title" id="pin-print-title">사후 설문 PIN 절취표</h3>
+        <h3 class="section-title" id="pin-print-title">로그인·설문 공용 PIN 절취표</h3>
         <p class="note">칸마다 한 사람입니다. 점선을 따라 잘라서 한 사람에게 한 칸씩 나눠 주세요.
-          통째로 게시하면 방어가 즉시 무너집니다.</p>
+          이 PIN 하나로 미션 화면 로그인과 사후 설문을 모두 합니다 —
+          통째로 게시하면 남의 계정까지 열리므로 절대 게시하지 마세요.</p>
         <div class="pin-cut-grid" id="pin-cut-grid"></div>
       </div>
     </section>
@@ -457,7 +493,8 @@ body.page-admin #app { max-width: 1040px; }
 import { MODE, classLabels } from './js/firebase-config.js';
 import { db, isCourseLocked } from './js/db.js';
 import {
-  classOptions, setText, el, clear, registerServiceWorker, makeSpotId, groupColor, formatTime
+  classOptions, setText, el, clear, registerServiceWorker, makeSpotId, groupColor, formatTime,
+  pad2, studentEmail
 } from './js/common.js';
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
@@ -471,7 +508,7 @@ import { compressFrameAsset } from './js/compress.js';
 import {
   parseRosterText, rosterPinPreview, defaultQuestions, validateQuestions, normalizeQuestions,
   renderQuestions, buildSurveyCsv, csvFileName, csvColumns, duplicateSids, duplicateWarningText,
-  sidOfAnswerId, SCALE5_LABELS, SCALE5_MIN, QUESTION_TYPES, QUESTION_TYPE_LABELS
+  sidOfAnswerId, isSid, SCALE5_LABELS, SCALE5_MIN, QUESTION_TYPES, QUESTION_TYPE_LABELS
 } from './js/survey.js';
 
 const TEACHER_KEY = 'dku:teacher';
@@ -482,9 +519,6 @@ const classSelect = document.getElementById('admin-class');
 const bulkCount = document.getElementById('bulk-count');
 const bulkError = document.getElementById('bulk-error');
 const bulkMsg = document.getElementById('bulk-msg');
-const printArea = document.getElementById('print-area');
-const printRow = document.getElementById('print-row');
-const passwordBody = document.getElementById('password-body');
 const courseGroup = document.getElementById('course-group');
 const courseList = document.getElementById('course-list');
 const courseLockNote = document.getElementById('course-lock-note');
@@ -549,28 +583,21 @@ function subscribe(nextClassId) {
   if (unsubscribe) unsubscribe();
   classId = nextClassId;
   setText(document.getElementById('admin-class-note'),
-    (classLabels[classId] || classId) + ' — 모둠 계정 이메일은 반 ID와 모둠 번호로 자동으로 정해집니다. 따로 입력할 것이 없습니다.');
+    (classLabels[classId] || classId) + ' — 학생 계정 이메일은 반 ID와 학번으로 자동으로 정해집니다. 따로 입력할 것이 없습니다.');
   unsubscribe = db.onDashboard(classId, function (next) {
     rows = next;
     renderGroupSelect();
     renderCopySources();
+    renderMemberTabs();      // 모둠이 늘거나 줄면 구성 탭도 따라간다
   });
-  reloadSurvey();   // 반이 바뀌면 명렬표·PIN·문항·응답도 그 반 것으로 다시 읽는다(설문 v1 §3 단계 3a·3b)
+  reloadSurvey();   // 반이 바뀌면 명렬표·PIN·모둠 대응표·문항·응답도 그 반 것으로 다시 읽는다
 }
 
 classSelect.addEventListener('change', function () { subscribe(classSelect.value); });
 
 // ── 1. 모둠 일괄 생성 ─────────────────────────────────────────────────────
-// 사람이 헷갈리는 글자(l, 1, O, 0)를 뺀 8자리. 서버에는 남지 않는다.
-function makePassword() {
-  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-  const buf = new Uint32Array(8);
-  crypto.getRandomValues(buf);
-  let out = '';
-  for (let i = 0; i < 8; i += 1) out += chars[buf[i] % chars.length];
-  return out;
-}
-
+// 모둠에는 계정도 비밀번호도 없다(§3-0 ⑷). 순수 Firestore 문서 생성이라 재실행이 안전하고,
+// 이미 있는 번호는 course·done을 건드리지 않고 「기존」으로 계수된다.
 document.getElementById('bulk-create-btn').addEventListener('click', async function () {
   show(bulkError, '');
   setText(bulkMsg, '');
@@ -579,88 +606,405 @@ document.getElementById('bulk-create-btn').addEventListener('click', async funct
     show(bulkError, '모둠 수는 1~30 사이로 넣으세요');
     return;
   }
-  clear(passwordBody);
   let created = 0;
   let skipped = 0;
   const failures = [];
   for (let no = 1; no <= n; no += 1) {
-    const password = makePassword();
     try {
-      // 확정 15′-⑷ 사슬(보조 App · 보상 절차)은 db.admin.createGroup 안에 있다.
-      const res = await db.admin.createGroup(classId, no, password, []);
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-gid', res.gid);
-      tr.appendChild(el('td', '', classLabels[classId] || classId));
-      tr.appendChild(el('td', '', no + '모둠'));
-      tr.appendChild(el('td', '', res.email));
-      const pw = el('td', 'pw', password);
-      pw.id = 'pw-' + res.gid;
-      tr.appendChild(pw);
-      passwordBody.appendChild(tr);
-      created += 1;
+      const res = await db.admin.createGroup(classId, no, []);
+      if (res.reissued) skipped += 1; else created += 1;
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
-      if (msg.indexOf('이미 있는') >= 0 || (e && e.code === 'auth/email-already-in-use')) {
-        skipped += 1;
-      } else {
-        failures.push(no + '모둠: ' + explainWriteError(e, msg));
-      }
+      failures.push(no + '모둠: ' + explainWriteError(e, msg));
     }
   }
-  printArea.hidden = created === 0;
-  printRow.hidden = created === 0;
   setText(bulkMsg, '새로 만든 모둠 ' + created + '개, 이미 있어 건너뛴 모둠 ' + skipped + '개.'
-    + (created ? ' 비밀번호는 지금 인쇄하거나 적어 두세요.' : ''));
+    + ' 구성원은 아래 「1-2. 모둠 구성」에서 정합니다.');
   if (failures.length) show(bulkError, failures.join(' / '));
   renderGroupSelect();
+  renderMemberTabs();
 });
 
-document.getElementById('print-btn').addEventListener('click', function () { window.print(); });
-
-// ── 1-1. 단일 모둠 재발급 ────────────────────────────────────────────────
-// 안내서_당일운영 §5-2가 지시하는 조작(모둠 1개만 다시 발급)에 대응하는 화면이다.
-// db.admin.createGroup은 비파괴이므로 기존 코스·완료 기록을 덮어쓰지 않는다.
-const reissueNo = document.getElementById('reissue-no');
+// ── 1-1. 학생 계정 재발급 ────────────────────────────────────────────────
+// 콘솔에서 그 학생 Auth 계정을 지운 뒤 여기서 새 PIN을 뽑아 계정을 다시 만든다.
+// PIN이 곧 계정 자격의 재료이므로, PIN을 갈아 끼우고 계정을 다시 만드는 것이 재발급이다.
+// 모둠 배정·설문 응답은 학번을 키로 쓰므로 그대로 남는다.
+const reissueSid = document.getElementById('reissue-sid');
 const reissueError = document.getElementById('reissue-error');
 const reissueMsg = document.getElementById('reissue-msg');
-const reissueArea = document.getElementById('reissue-area');
-const reissueBody = document.getElementById('reissue-body');
+const reissueEmail = document.getElementById('reissue-email');
+
+// 안내문의 「어느 계정을 지우면 되는가」를 학번에 맞춰 실시간으로 채운다.
+// 파생식은 common.js 하나가 원천이다(F-1) — 여기서 이메일을 조립하지 않는다.
+function paintReissueEmail() {
+  const sid = reissueSid.value.trim();
+  setText(reissueEmail, isSid(sid) && classId ? studentEmail(classId, sid) : '해당 학생');
+}
+reissueSid.addEventListener('input', paintReissueEmail);
 
 document.getElementById('reissue-btn').addEventListener('click', async function () {
   show(reissueError, '');
   setText(reissueMsg, '');
-  clear(reissueBody);
-  reissueArea.hidden = true;
-  const no = Number(reissueNo.value);
-  if (!(no >= 1 && no <= 30)) {
-    show(reissueError, '모둠 번호는 1~30 사이로 넣으세요');
+  const sid = reissueSid.value.trim();
+  if (!isSid(sid)) {
+    show(reissueError, '학번은 숫자 5자리입니다');
     return;
   }
-  const password = makePassword();
+  const name = surveyRoster.students[sid];
+  if (!name) {
+    show(reissueError, '그 학번은 명렬표에 없습니다. 먼저 「5. 명렬표」에 등록하세요');
+    return;
+  }
   try {
-    const res = await db.admin.createGroup(classId, no, password, []);
-    const tr = document.createElement('tr');
-    tr.setAttribute('data-gid', res.gid);
-    tr.appendChild(el('td', '', classLabels[classId] || classId));
-    tr.appendChild(el('td', '', no + '모둠'));
-    tr.appendChild(el('td', '', res.email));
-    const pw = el('td', 'pw', password);
-    pw.id = 'reissue-pw-' + res.gid;
-    tr.appendChild(pw);
-    reissueBody.appendChild(tr);
-    reissueArea.hidden = false;
-    setText(reissueMsg, res.reissued
-      ? no + '모둠 계정을 다시 발급했습니다. 코스와 완료 기록은 그대로입니다. 새 비밀번호를 적어 그 모둠에만 주세요.'
-      : no + '모둠을 새로 만들었습니다. 코스는 아래 「2. 코스 편집」에서 넣으세요.');
-    renderGroupSelect();
+    // 이 학번의 PIN만 새로 뽑고(다른 학생 PIN은 보존) 계정을 다시 만든다.
+    // PIN 값은 여기로 돌려받지 않는다 — 화면에 뿌리는 값의 출처는 언제나 rosterPins 재독이다.
+    const res = await db.admin.reissueStudentPin(classId, sid);
+    await reloadSurveyRoster();
+    const pin = surveyRoster.pins[sid] || '';
+    if (res.failed) {
+      show(reissueError, sid + ' 계정이 아직 살아 있습니다. Firebase 콘솔 → Authentication → Users 에서 '
+        + studentEmail(classId, sid) + ' 를 먼저 삭제한 뒤 다시 누르세요.'
+        + ' (PIN은 ' + pin + '로 바뀌었습니다 — 계정을 지우고 한 번 더 누르세요)');
+      return;
+    }
+    setText(reissueMsg, sid + ' ' + name + ' — 새 PIN ' + pin
+      + ' · 계정을 다시 만들었습니다. 모둠 배정과 설문 응답은 그대로입니다.'
+      + ' 절취표를 다시 인쇄해 이 학생에게만 주세요.');
   } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-    const exists = msg.indexOf('이미 있는') >= 0 || (e && e.code === 'auth/email-already-in-use');
-    show(reissueError, exists
-      ? no + '모둠 계정이 아직 살아 있습니다. Firebase 콘솔 → Authentication → Users 에서 그 계정을 먼저 삭제한 뒤 다시 누르세요'
-      : explainWriteError(e, msg));
+    show(reissueError, explainWriteError(e, e && e.message ? e.message : String(e)));
   }
 });
+
+// ── 1-2. 모둠 구성 (§3-0 ⑸ ⓓ) ────────────────────────────────────────────
+// 학생이 자율로 짠 모둠을 교사가 이름으로 입력하면 명렬표와 대조해 학번으로 바꾼다.
+//
+// 작업 상태는 `assign`(gid → 학번 배열) 하나다. **일부러 같은 학번이 두 모둠에 들어갈 수
+// 있게 둔다** — 그래야 「중복 배정」을 화면에서 보여 주고 저장을 막을 수 있다(⑸ ⓓ).
+// 서버 문서(bySid)는 학번 하나에 모둠 하나뿐이라 중복을 구조적으로 표현하지 못한다.
+const memberTabsBox = document.getElementById('member-tabs');
+const memberText = document.getElementById('member-text');
+const memberMatchMsg = document.getElementById('member-match-msg');
+const memberError = document.getElementById('member-error');
+const memberWarn = document.getElementById('member-warn');
+const memberDupBox = document.getElementById('member-dup-box');
+const memberDupText = document.getElementById('member-dup-text');
+const memberDupList = document.getElementById('member-dup-list');
+const memberTableBody = document.getElementById('member-table-body');
+const memberUnassigned = document.getElementById('member-unassigned');
+const memberSaveMsg = document.getElementById('member-save-msg');
+
+let assign = {};             // gid → [sid…]
+let unresolvedNames = {};    // gid → [입력 원문…]  명렬표에서 못 찾은 이름
+let activeGid = null;
+let pendingDup = null;       // 동명이인 선택 팝업이 기다리는 [{name, sids:[…]}]
+
+function gidList() {
+  return rows.map(function (r) { return r.gid; }).sort();
+}
+
+function nameOf(sid) {
+  return (surveyRoster.students || {})[sid] || '';
+}
+
+// 이름 → 학번 목록. 같은 이름이 둘 이상이면 동명이인이다.
+function rosterByName() {
+  const out = {};
+  Object.keys(surveyRoster.students || {}).forEach(function (sid) {
+    const nm = String(surveyRoster.students[sid]).trim();
+    if (!out[nm]) out[nm] = [];
+    out[nm].push(sid);
+  });
+  Object.keys(out).forEach(function (k) { out[k].sort(); });
+  return out;
+}
+
+// 같은 학번이 두 모둠 이상에 들어가 있는가 → [{sid, gids:[…]}]
+function duplicateAssignments() {
+  const seen = {};
+  Object.keys(assign).forEach(function (gid) {
+    (assign[gid] || []).forEach(function (sid) {
+      if (!seen[sid]) seen[sid] = [];
+      if (seen[sid].indexOf(gid) < 0) seen[sid].push(gid);
+    });
+  });
+  return Object.keys(seen).filter(function (sid) { return seen[sid].length > 1; })
+    .sort().map(function (sid) { return { sid: sid, gids: seen[sid].sort() }; });
+}
+
+function assignedSids() {
+  const out = {};
+  Object.keys(assign).forEach(function (gid) {
+    (assign[gid] || []).forEach(function (sid) { out[sid] = true; });
+  });
+  return out;
+}
+
+// 서버의 bySid를 작업 상태로 편다.
+function loadAssignFrom(bySid) {
+  assign = {};
+  unresolvedNames = {};
+  Object.keys(bySid || {}).forEach(function (sid) {
+    const gid = pad2(bySid[sid]);
+    if (!assign[gid]) assign[gid] = [];
+    assign[gid].push(sid);
+  });
+  Object.keys(assign).forEach(function (gid) { assign[gid].sort(); });
+}
+
+function renderMemberTabs() {
+  const gids = gidList();
+  clear(memberTabsBox);
+  if (!gids.length) {
+    memberTabsBox.appendChild(el('p', 'note', '먼저 「1. 모둠 일괄 생성」으로 모둠을 만드세요.'));
+    activeGid = null;
+    renderMemberBoard();
+    return;
+  }
+  if (gids.indexOf(activeGid) < 0) activeGid = gids[0];
+  gids.forEach(function (gid) {
+    const b = el('button', gid === activeGid ? '' : 'secondary', Number(gid) + '모둠');
+    b.type = 'button';
+    b.id = 'member-tab-' + gid;
+    b.setAttribute('data-gid', gid);
+    b.addEventListener('click', function () { switchMemberTab(gid); });
+    memberTabsBox.appendChild(b);
+  });
+  renderMemberBoard();
+}
+
+// 탭을 옮기기 전에 지금 탭의 입력을 잃지 않도록, 텍스트 상자는 **확정 명단에서 다시 채운다**.
+// 대조하지 않은 초안은 남기지 않는다 — 남기면 「대조했는데 확정이 안 된」 상태와 구분되지 않는다.
+function switchMemberTab(gid) {
+  activeGid = gid;
+  show(memberError, '');
+  setText(memberMatchMsg, '');
+  memberDupBox.hidden = true;
+  pendingDup = null;
+  renderMemberTabs();
+}
+
+function fillMemberText() {
+  if (!activeGid) { memberText.value = ''; return; }
+  const lines = (assign[activeGid] || []).map(function (sid) { return sid + ' ' + nameOf(sid); });
+  const bad = unresolvedNames[activeGid] || [];
+  memberText.value = lines.concat(bad).join('\n');
+}
+
+function renderMemberTable() {
+  clear(memberTableBody);
+  const dupSids = {};
+  duplicateAssignments().forEach(function (d) { dupSids[d.sid] = true; });
+  gidList().forEach(function (gid) {
+    const list = (assign[gid] || []).slice().sort();
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-gid', gid);
+    tr.appendChild(el('td', '', Number(gid) + '모둠'));
+    tr.appendChild(el('td', '', String(list.length) + '명'));
+    const cell = el('td', '', list.map(function (sid) {
+      return sid + ' ' + nameOf(sid) + (dupSids[sid] ? ' ⚠중복' : '');
+    }).join(', ') + (unresolvedNames[gid] && unresolvedNames[gid].length
+      ? '  / 미해소: ' + unresolvedNames[gid].join(', ') : ''));
+    cell.id = 'member-cell-' + gid;
+    tr.appendChild(cell);
+    memberTableBody.appendChild(tr);
+  });
+}
+
+// 미배정 잔여 명단은 **상시 표시**다(⑸ ⓓ). 여기가 0명이 되는 것이 모둠 구성의 완료 신호다.
+function renderUnassignedList() {
+  const taken = assignedSids();
+  const left = Object.keys(surveyRoster.students || {}).sort()
+    .filter(function (sid) { return !taken[sid]; });
+  setText(memberUnassigned, Object.keys(surveyRoster.students || {}).length === 0
+    ? '명렬표를 먼저 등록하세요.'
+    : (left.length
+      ? '미배정 ' + left.length + '명 — ' + left.map(function (sid) { return sid + ' ' + nameOf(sid); }).join(', ')
+      : '미배정 0명 — 전원이 모둠에 들어갔습니다.'));
+}
+
+function renderMemberBoard() {
+  const dups = duplicateAssignments();
+  show(memberWarn, dups.length
+    ? '⚠ 같은 학생이 두 모둠에 들어가 있습니다 — ' + dups.map(function (d) {
+      return d.sid + ' ' + nameOf(d.sid) + '(' + d.gids.map(Number).join('모둠·') + '모둠)';
+    }).join(' / ') + '. 한쪽에서 지워야 저장됩니다.'
+    : '');
+  fillMemberText();
+  renderMemberTable();
+  renderUnassignedList();
+}
+
+// 입력 파싱 — 줄바꿈·쉼표 구분. 「학번 이름」으로 붙여넣은 줄도 받는다(학번이 우선).
+function parseMemberTokens(text) {
+  return String(text == null ? '' : text)
+    .split(/[\n,]/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+}
+
+function tokenSid(token) {
+  const m = token.match(/^([0-9]{5})\b/);
+  if (m && (surveyRoster.students || {})[m[1]]) return m[1];
+  return null;
+}
+
+function onMemberMatch() {
+  show(memberError, '');
+  memberDupBox.hidden = true;
+  pendingDup = null;
+  if (!activeGid) { show(memberError, '먼저 모둠을 만드세요'); return; }
+  if (!Object.keys(surveyRoster.students || {}).length) {
+    show(memberError, '명렬표가 없습니다. 「5. 명렬표」에서 먼저 등록하세요');
+    return;
+  }
+  const byName = rosterByName();
+  const tokens = parseMemberTokens(memberText.value);
+  const picked = [];
+  const ambiguous = [];
+  const missing = [];
+  tokens.forEach(function (t) {
+    const direct = tokenSid(t);
+    if (direct) { if (picked.indexOf(direct) < 0) picked.push(direct); return; }
+    const hit = byName[t];
+    if (!hit) { missing.push(t); return; }
+    if (hit.length === 1) { if (picked.indexOf(hit[0]) < 0) picked.push(hit[0]); return; }
+    ambiguous.push({ name: t, sids: hit });
+  });
+
+  assign[activeGid] = picked.sort();
+  unresolvedNames[activeGid] = missing;
+  renderMemberBoard();
+
+  const parts = [];
+  parts.push('확정 ' + picked.length + '명');
+  if (ambiguous.length) parts.push('동명이인 ' + ambiguous.length + '건 — 아래에서 고르세요');
+  if (missing.length) {
+    parts.push('명렬표에 없는 이름 ' + missing.length + '건 — ' + missing.map(function (t) {
+      const near = Object.keys(byName).filter(function (nm) {
+        return nm.indexOf(t) >= 0 || t.indexOf(nm) >= 0;
+      }).slice(0, 3);
+      return t + (near.length ? '(비슷한 이름: ' + near.join(', ') + ')' : '');
+    }).join(' / '));
+  }
+  setText(memberMatchMsg, parts.join(' · '));
+  if (ambiguous.length) openDupPicker(ambiguous);
+}
+
+// 동명이인 선택 팝업 — 학번을 병기해 고르게 한다(⑸ ⓓ).
+function openDupPicker(list) {
+  pendingDup = list;
+  clear(memberDupList);
+  setText(memberDupText, '같은 이름이 둘 이상입니다. 학번을 보고 이 모둠에 넣을 사람을 고르세요.');
+  list.forEach(function (item, i) {
+    const wrap = el('div', 'field');
+    const lab = el('label', '', item.name);
+    lab.setAttribute('for', 'member-dup-' + i);
+    wrap.appendChild(lab);
+    const sel = document.createElement('select');
+    sel.id = 'member-dup-' + i;
+    sel.setAttribute('data-name', item.name);
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '이 모둠에 넣지 않음';
+    sel.appendChild(none);
+    item.sids.forEach(function (sid) {
+      const o = document.createElement('option');
+      o.value = sid;
+      o.textContent = sid + ' ' + nameOf(sid);
+      sel.appendChild(o);
+    });
+    wrap.appendChild(sel);
+    memberDupList.appendChild(wrap);
+  });
+  memberDupBox.hidden = false;
+}
+
+document.getElementById('member-dup-ok').addEventListener('click', function () {
+  if (!pendingDup || !activeGid) { memberDupBox.hidden = true; return; }
+  const left = [];
+  pendingDup.forEach(function (item, i) {
+    const sel = document.getElementById('member-dup-' + i);
+    const sid = sel ? sel.value : '';
+    if (sid) {
+      if ((assign[activeGid] || []).indexOf(sid) < 0) assign[activeGid].push(sid);
+    } else {
+      left.push(item.name);
+    }
+  });
+  assign[activeGid].sort();
+  unresolvedNames[activeGid] = (unresolvedNames[activeGid] || []).concat(left);
+  pendingDup = null;
+  memberDupBox.hidden = true;
+  renderMemberBoard();
+  setText(memberMatchMsg, '동명이인 선택을 반영했습니다.'
+    + (left.length ? ' 넣지 않은 이름 ' + left.length + '건은 미해소로 남습니다.' : ''));
+});
+
+document.getElementById('member-dup-cancel').addEventListener('click', function () {
+  pendingDup = null;
+  memberDupBox.hidden = true;
+  setText(memberMatchMsg, '동명이인을 고르지 않았습니다. 그 이름들은 이 모둠에 들어가지 않았습니다.');
+});
+
+document.getElementById('member-match-btn').addEventListener('click', onMemberMatch);
+
+document.getElementById('member-clear-btn').addEventListener('click', function () {
+  if (!activeGid) return;
+  assign[activeGid] = [];
+  unresolvedNames[activeGid] = [];
+  show(memberError, '');
+  setText(memberMatchMsg, Number(activeGid) + '모둠을 비웠습니다. 「구성 저장」을 눌러야 서버에 반영됩니다.');
+  renderMemberBoard();
+});
+
+document.getElementById('member-save-btn').addEventListener('click', async function () {
+  show(memberError, '');
+  setText(memberSaveMsg, '');
+  const dups = duplicateAssignments();
+  if (dups.length) {
+    show(memberError, '같은 학생이 두 모둠에 들어가 있어 저장하지 않았습니다 — ' + dups.map(function (d) {
+      return d.sid + ' ' + nameOf(d.sid);
+    }).join(', '));
+    return;
+  }
+  const bySid = {};
+  Object.keys(assign).forEach(function (gid) {
+    (assign[gid] || []).forEach(function (sid) { bySid[sid] = gid; });
+  });
+  try {
+    const res = await db.saveMembership(classId, bySid);
+    const left = Object.keys(surveyRoster.students || {}).length - res.count;
+    const stuck = Object.keys(unresolvedNames).reduce(function (n, gid) {
+      return n + (unresolvedNames[gid] || []).length;
+    }, 0);
+    setText(memberSaveMsg, '모둠 구성을 저장했습니다 — 배정 ' + res.count + '명 / 미배정 ' + left + '명.'
+      + (stuck ? ' 미해소 이름 ' + stuck + '건은 저장되지 않았습니다.' : '')
+      + ' 학생은 다시 로그인하면 새 모둠 화면을 봅니다.');
+    await reloadMembership();
+  } catch (e) {
+    show(memberError, explainWriteError(e, e && e.message ? e.message : String(e)));
+  }
+});
+
+document.getElementById('member-reload-btn').addEventListener('click', async function () {
+  setText(memberSaveMsg, '');
+  await reloadMembership();
+  setText(memberMatchMsg, '서버에서 다시 읽었습니다. 화면의 편집 내용은 서버본으로 덮였습니다.');
+});
+
+async function reloadMembership() {
+  let m = { bySid: {} };
+  try {
+    m = await db.getMembership(classId);
+  } catch (e) {
+    m = { bySid: {} };
+  }
+  loadAssignFrom(m.bySid);
+  show(memberError, '');
+  memberDupBox.hidden = true;
+  pendingDup = null;
+  renderMemberTabs();
+}
 
 // ── 2. 코스 편집 ──────────────────────────────────────────────────────────
 function renderGroupSelect() {
@@ -1433,6 +1777,8 @@ const rosterError = document.getElementById('roster-error');
 const rosterMsg = document.getElementById('roster-msg');
 const rosterConfirm = document.getElementById('roster-confirm');
 const rosterConfirmText = document.getElementById('roster-confirm-text');
+const rosterProgress = document.getElementById('roster-progress');
+const rosterFailed = document.getElementById('roster-failed');
 const pinPrintArea = document.getElementById('pin-print-area');
 const pinPrintRow = document.getElementById('pin-print-row');
 const pinCutGrid = document.getElementById('pin-cut-grid');
@@ -1449,8 +1795,9 @@ function renderPinCutTable() {
     const cell = el('div', 'pin-cut-cell');
     cell.setAttribute('data-sid', sid);
     cell.appendChild(el('div', 'pin-cut-who', (classLabels[classId] || classId) + ' ' + sid + ' ' + surveyRoster.students[sid]));
-    cell.appendChild(el('div', '', '설문 PIN'));
+    cell.appendChild(el('div', '', '로그인·설문 공용 PIN'));
     cell.appendChild(el('div', 'pin-cut-pin', surveyRoster.pins[sid] || '-'));
+    cell.appendChild(el('div', '', '학번 ' + sid + ' + 이 PIN으로 로그인합니다'));
     cell.appendChild(el('div', '', '잃어버리면 선생님께 말하세요'));
     pinCutGrid.appendChild(cell);
   });
@@ -1469,17 +1816,38 @@ async function reloadSurveyRoster() {
     surveyRoster = { students: {}, pins: {} };
   }
   renderPinCutTable();
+  paintReissueEmail();
 }
 
+// 명렬표 등록 = roster·rosterPins 쓰기 + **학생 계정 생성**(§3-0 ⑷). 계정 생성은 학생 수만큼
+// 순차로 도는 네트워크 작업이라 몇 초 걸린다 — 진행 표시가 없으면 교사가 멈춘 줄 안다.
 async function commitRoster(students) {
+  const saveBtn = document.getElementById('roster-save-btn');
+  saveBtn.disabled = true;
+  setText(rosterProgress, '');
+  show(rosterFailed, '');
   try {
-    const res = await db.saveRoster(classId, students);
+    const res = await db.saveRoster(classId, students, function (done, total, sid) {
+      setText(rosterProgress, '학생 계정 만드는 중 ' + done + ' / ' + total + '  (' + sid + ')');
+    });
     await reloadSurveyRoster();
+    renderMemberBoard();    // 명렬표가 바뀌면 모둠 구성 화면의 미배정 명단도 따라간다
     renderSurveyStatus();   // 명렬표가 바뀌면 미제출 명단도 그 자리에서 다시 그린다(단계 3b)
+    setText(rosterProgress, '');
     setText(rosterMsg, '명렬표 ' + res.count + '명 등록. 기존 PIN ' + res.kept.length
-      + '건 보존 / 신규 발급 ' + res.issued.length + '건.');
+      + '건 보존 / 신규 발급 ' + res.issued.length + '건.'
+      + ' 학생 계정 새로 생성 ' + res.created + '건 / 이미 있어 건너뜀 ' + res.existed + '건.'
+      + (MODE === 'demo' ? ' (데모 모드의 계정 숫자는 모사값입니다)' : ''));
+    if (res.failed.length) {
+      show(rosterFailed, '계정을 만들지 못한 학번 ' + res.failed.length + '명 — ' + res.failed.join(', ')
+        + ' · 이 학생들은 로그인할 수 없습니다. 연결을 확인하고 「명렬표 등록 · 계정 생성」을 다시 누르세요'
+        + '(이미 만들어진 계정은 건너뜁니다).');
+    }
   } catch (e) {
+    setText(rosterProgress, '');
     show(rosterError, e && e.message ? e.message : '명렬표를 등록하지 못했습니다');
+  } finally {
+    saveBtn.disabled = false;
   }
 }
 
@@ -1530,11 +1898,9 @@ document.getElementById('pin-lookup-btn').addEventListener('click', function () 
   setText(pinLookupMsg, sid + ' ' + name + ' — PIN ' + (surveyRoster.pins[sid] || '없음'));
 });
 
-// 인쇄할 때만 절취표 영역이 보이게 한다. 모둠 비밀번호표와 한 장에 섞이지 않는다.
+// 인쇄 대상은 절취표 하나뿐이다(모둠 비밀번호표는 폐기). @media print가 그 영역만 남긴다.
 document.getElementById('pin-print-btn').addEventListener('click', function () {
-  document.body.classList.add('print-pins');
   window.print();
-  document.body.classList.remove('print-pins');
 });
 
 // ── 6. 사후 설문 — 문항·마감·수합 (설문 v1 §3 단계 3b) ───────────────────
@@ -1992,6 +2358,7 @@ async function reloadSurveyBoard() {
 
 async function reloadSurvey() {
   await reloadSurveyRoster();
+  await reloadMembership();   // 모둠 구성은 명렬표를 읽은 뒤여야 이름이 붙는다
   await reloadSurveyBoard();
 }
 

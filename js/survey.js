@@ -6,7 +6,7 @@
 //   ⑵ 문항 스키마 {id, type, label, options?, required} 검증
 //   ⑶ CSV 생성기 (RFC 4180 + 선두 BOM + CRLF + 수식 주입 방어)
 //   ⑷ 서술 상한 2,000자
-//   ⑸ 학번·PIN·응답 문서 id 규약 (경로 비밀: 문서 id = {sid}-{pin})
+//   ⑸ 학번·PIN 형식 규약 + 응답 문서 id = **{sid}** (로그인모둠개편 §1-2 추정 2)
 //   ⑹ PIN 발급·보존 머지 (재등록이 기존 학번의 PIN을 바꾸지 않는다 — §5 금지 8d)
 //   ⑺ 문항 렌더러 — 학생 화면과 관리 화면 미리보기가 **같은 함수**를 쓴다(§8 D절)
 //
@@ -20,7 +20,10 @@ export const SURVEY_ANSWERS_COLLECTION = 'surveyAnswers'; // classes/{cid}/surve
 export const SURVEY_DOC = {
   config: 'config',
   roster: 'roster',
-  rosterPins: 'rosterPins'
+  rosterPins: 'rosterPins',
+  // 모둠 대응표 {bySid:{sid:gid}} — 로그인모둠개편 §3-0 ⑶ 신설. 같은 반 학생이 읽고
+  // 교사만 쓴다. 한 학생은 정확히 한 모둠(bySid의 단일 키가 구조적 보증).
+  membership: 'membership'
 };
 
 // ── 상한값 (§0 증보 4 — 사용자 확정) ───────────────────────────────────────
@@ -75,16 +78,18 @@ function cloneQuestion(q) {
 
 // ── 학번·PIN 형식 (§1-1 #5 · 추정 ③-a) ────────────────────────────────────
 // 학번 5자리, PIN 4자리(1000~9999 — 선행 0 없음). 규칙의 정규식과 같은 형식이다.
+//
+// PIN의 역할이 바뀌었다(로그인모둠개편): 예전에는 응답 문서 주소에 실리는 「경로 비밀」이자
+// 설문 전용 열람 토큰이었고, 지금은 **로그인 자격의 절반**이다(학번 + PIN). 형식 판정
+// 자체는 그대로라 isPin/assertPin은 남는다 — 쓰는 자리가 PIN 발급 머지와 로그인 폼으로
+// 옮겨졌을 뿐이다. 응답 문서 id에서는 PIN이 사라졌다.
 export const SID_PATTERN = '^[0-9]{5}$';
 export const PIN_PATTERN = '^[0-9]{4}$';
-export const ANSWER_ID_PATTERN = '^[0-9]{5}-[0-9]{4}$';
 const SID_RE = new RegExp(SID_PATTERN);
 const PIN_RE = new RegExp(PIN_PATTERN);
-const ANSWER_ID_RE = new RegExp(ANSWER_ID_PATTERN);
 
 export function isSid(v) { return typeof v === 'string' && SID_RE.test(v); }
 export function isPin(v) { return typeof v === 'string' && PIN_RE.test(v); }
-export function isAnswerId(v) { return typeof v === 'string' && ANSWER_ID_RE.test(v); }
 
 export function assertSid(v) {
   const s = String(v == null ? '' : v).trim();
@@ -98,16 +103,13 @@ export function assertPin(v) {
   return s;
 }
 
-// 응답 문서 id = {sid}-{pin} (경로 비밀 · 추정 ③-b).
-// PIN을 모르면 이 주소를 만들 수 없어 읽기까지 막힌다.
-export function answerDocId(sid, pin) {
-  return assertSid(sid) + '-' + assertPin(pin);
-}
-
-// 문서 id에서 학번만 떼어낸다. 형식이 아니면 null — 목록 화면이 조용히 건너뛴다.
+// 응답 문서 id = **{sid}**. 신원이 Auth로 확정되므로 「경로 비밀」이 필요 없다
+// (§1-2 추정 2 — PIN이 경로에서 사라져 노출면이 줄었다).
+// 문서 id에서 학번을 떼어내는 이 함수는 이제 형식 검사일 뿐이지만, 목록·CSV가 부르는
+// 자리가 그대로라 이름을 유지한다. 형식이 아니면 null — 화면이 조용히 건너뛴다.
 export function sidOfAnswerId(aid) {
-  if (!isAnswerId(aid)) return null;
-  return String(aid).split('-')[0];
+  const s = String(aid == null ? '' : aid).trim();
+  return isSid(s) ? s : null;
 }
 
 // ── PIN 발급 (§3 단계 1 · §5 금지 8d) ─────────────────────────────────────
@@ -119,7 +121,9 @@ export function generatePin() {
 }
 
 // 재등록 머지: 기존 학번의 PIN은 그대로 두고 신규 학번에만 발급한다.
-// 명렬표에서 빠진 학번의 PIN도 지우지 않는다 — 그 학생의 기존 응답 경로를 살려 둔다.
+// **PIN이 바뀌면 그 학생의 계정 비밀번호(sid+'-'+pin)가 서버의 것과 어긋나 로그인이 막힌다** —
+// 재등록의 보존 계약이 설문 경로만이 아니라 로그인 전체를 지탱하게 되었다(§3-0 ⑴).
+// 명렬표에서 빠진 학번의 PIN도 지우지 않는다(그 학생의 기존 계정·응답을 살려 둔다).
 // 반환 pins의 값은 전부 문자열이다.
 export function mergeRosterPins(existingPins, sids) {
   const prev = existingPins && typeof existingPins === 'object' ? existingPins : {};
@@ -283,7 +287,9 @@ export function validateAnswers(questions, answers) {
 }
 
 // ── 응답 목록 진단 (불변식 ③-c: 한 sid에 응답 1건) ────────────────────────
-// doc id의 sid 접두가 겹치면 PIN이 바뀐 이력이 있다는 뜻이다. 감지해서 알린다.
+// 문서 id가 {sid} 하나가 되어 같은 학번의 응답이 2건이 되는 경로는 구조적으로 사라졌다.
+// 그래도 진단은 남긴다 — 구판에서 넘어온 `{sid}-{pin}` 문서가 컬렉션에 섞여 있으면
+// 이 경고가 그 사실을 드러낸다. 정상 운영에서는 항상 빈 배열이다.
 export function duplicateSids(answers) {
   const bySid = {};
   (answers || []).forEach(function (a) {
@@ -296,7 +302,7 @@ export function duplicateSids(answers) {
 
 export function duplicateWarningText(sids) {
   if (!sids || !sids.length) return '';
-  return '⚠ 학번 ' + sids.join(', ') + ' 응답 2건 이상 — PIN 변경 이력 확인';
+  return '⚠ 학번 ' + sids.join(', ') + ' 응답 2건 이상 — 구판 응답 문서 잔존 확인';
 }
 
 // ── 문항 렌더러 (§3 단계 2·3b — 학생 화면과 미리보기가 같은 함수를 쓴다) ──

@@ -3,9 +3,9 @@
 
 import { classIds, classLabels, activeProjectId, APP_VERSION, SDK_VERSION } from './firebase-config.js';
 
-// ── 모둠 계정 이메일 규칙 (단일 원천 · F-1) ────────────────────────────────
+// ── 학생 계정 이메일 규칙 (단일 원천 · F-1) ────────────────────────────────
 // 아래 한 줄은 firestore.rules의 같은 줄과 문자 단위로 일치해야 한다(checks가 대조).
-// [EMAIL-RULE] g-{classId소문자}-{groupNo2자리}@{projectId}.web.app
+// [EMAIL-RULE] s-{classId소문자}-{학번5자리}@{projectId}.web.app
 
 // 모둠 번호를 2자리 0패딩 문자열로. 이 값이 그대로 모둠 문서 ID(gid)가 된다.
 export function pad2(groupNo) {
@@ -13,10 +13,33 @@ export function pad2(groupNo) {
   return n.length >= 2 ? n.slice(-2) : ('0' + n).slice(-2);
 }
 
-// 반 ID + 모둠 번호 → 결정적 모둠 계정 이메일. 인증 전 서버 읽기가 필요 없다.
-export function groupEmail(classId, groupNo, projectId) {
+// 반 ID + 학번 → 결정적 학생 계정 이메일. 인증 전 서버 읽기가 필요 없다.
+// 규칙의 studentEmail()과 같은 조립식이다(설계지시안 로그인모둠개편 §3-0 ⑴).
+export function studentEmail(classId, sid, projectId) {
   const pid = projectId || activeProjectId();
-  return 'g-' + String(classId).toLowerCase() + '-' + pad2(groupNo) + '@' + pid + '.web.app';
+  return 's-' + String(classId).toLowerCase() + '-' + String(sid) + '@' + pid + '.web.app';
+}
+
+// 학생 계정 비밀번호. 학생·교사 누구에게도 노출하지 않는 내부 값이며 화면에 찍지 않는다
+// (§5 금지 5 — 파생식은 코드에 있어도 되나 파생 **값**은 어디에도 남기지 않는다).
+// Firebase Auth의 6자 이상 요건을 학번 5자리 + '-' + PIN 4자리 = 10자로 충족한다.
+export function studentPassword(sid, pin) {
+  return String(sid) + '-' + String(pin);
+}
+
+// 학번 5자리에서 반 ID를 파생한다 — '10401' → '1-4', '11201' → '1-12'.
+// 로그인 화면의 반 select를 없애는 근거이며 파생식의 단일 원천이다(§3-0 ⑸).
+// 형식이 아니면 null이다. 호출자는 파생 직후 classIds 포함 여부를 대조한다.
+export function classIdOfSid(sid) {
+  const s = String(sid == null ? '' : sid).trim();
+  if (!/^[0-9]{5}$/.test(s)) return null;
+  return s.slice(0, 1) + '-' + String(parseInt(s.slice(1, 3), 10));
+}
+
+// 파생 + 등재 대조를 한 번에. 미등재 반이면 null이다(자격 오류 문면으로 거부한다).
+export function knownClassIdOfSid(sid) {
+  const cid = classIdOfSid(sid);
+  return cid && classIds.indexOf(cid) >= 0 ? cid : null;
 }
 
 // ── done 집합 키 (v3.1 §1-3 B-10) ────────────────────────────────────────
@@ -113,10 +136,20 @@ export function clearSession() {
 }
 
 // 미로그인 상태로 직접 URL에 접근하면 index.html로 되돌린다.
-export function requireLogin() {
+//
+// 개별 PIN 로그인에서는 **모둠 미배정 학생도 정상 로그인 상태**다(§1-1 #14).
+// 그래서 신원 판정 기준은 `classId && sid` 하나이고, 모둠(gid)은 화면마다 다르게 요구한다:
+//   needsGroup:false (기본) — mission·survey. 미배정도 들어오고 화면이 스스로 분기한다.
+//   needsGroup:true         — fourcut. 모둠 사진이 없으면 할 일이 없으므로 mission으로 보낸다
+//                             (index로 튕기면 로그인은 멀쩡한데 로그인 화면이 떠 혼란스럽다).
+export function requireLogin(opts) {
   const s = loadSession();
-  if (!s || !s.classId || !s.gid) {
+  if (!s || !s.classId || !s.sid) {
     location.replace('index.html');
+    return null;
+  }
+  if (opts && opts.needsGroup === true && !s.gid) {
+    location.replace('mission.html');
     return null;
   }
   return s;
