@@ -39,11 +39,18 @@ import {
   assertSid, isSid, isPin,
   mergeRosterPins, normalizeRoster, normalizeQuestions, validateQuestions
 } from './survey.js';
+// 앨범의 격자·캡션 규격·slot 규칙은 album.js 하나가 원천이다(F-1). 여기서 16·15를 다시 적지 않는다.
+import { ALBUM, albumSlotId, isAlbumSlotId, clampCaption, emptyAlbum } from './album.js';
+// 앨범 사진 상한도 compress.js 하나가 원천이다 — 250000을 두 곳에 적지 않는다(F-1).
+import { ALBUM_COMPRESS } from './compress.js';
 
 // ── 상한값 (§1-3) ─────────────────────────────────────────────────────────
 export const LIMITS = {
   FULL_MAX_BYTES: 900000,   // full base64 문자열의 UTF-8 바이트 상한
-  THUMB_MAX_BYTES: 20000    // thumb base64 문자열의 UTF-8 바이트 상한
+  THUMB_MAX_BYTES: 20000,   // thumb base64 문자열의 UTF-8 바이트 상한
+  // 앨범 사진 상한. 값의 원천은 compress.js의 ALBUM_COMPRESS 하나다(§3-0 ⑸).
+  // 앨범은 문서 1개 = 사진 1장이고 **썸네일이 없다**(§5 금지 5).
+  ALBUM_MAX_BYTES: ALBUM_COMPRESS.maxBytes
 };
 
 // 프레임 이미지 상한 — 원천은 frames.js다(두 곳에 숫자를 적지 않는다 · F-1).
@@ -149,8 +156,22 @@ function vaultTx(mode, fn) {
   });
 }
 
+// ⚠ 앨범 항목과 미션 항목이 **같은 보관함**에 산다. 둘을 가르는 계약은 두 겹이다
+//    (여행앨범 §3-0 ⑷-b · X-1 치명 방어):
+//    ⑴ id 접두사 — 앨범은 locIndex 자리에 `'a' + slot`을 넣는다(`1-4/01/a03`).
+//       접두사만으로는 부족하다: `listFor`는 `classId/gid/` 까지만 보므로 앨범 항목을
+//       그대로 통과시킨다(P-검토 A-1 실측).
+//    ⑵ **`listFor`의 kind 인자** — 미지정이면 **미션분만** 돌려준다. 기존 호출부 9곳은
+//       시그니처를 바꾸지 않아도 자동으로 미션분만 받는다. 앨범 경로만 'album'을,
+//       wipeLocalData만 'all'을 명시한다.
+//    이 둘이 없으면 `doneKey(undefined)`='Lundefined'가 `state.failed`에 섞여
+//    진행 수·축하 연출·미전송 배지가 오염된다(db.js:618·1623·2041 경유).
 export const vault = {
   id: function (classId, gid, locIndex) { return classId + '/' + gid + '/' + locIndex; },
+
+  // 앨범 항목의 보관함 id. slot은 '00'~'15' 2자리 문자열이다 → `1-4/01/a03`.
+  // 미션의 locIndex(0~4 숫자)와 문자열이 겹치지 않는다(§5 금지 3).
+  albumId: function (classId, gid, slot) { return vault.id(classId, gid, 'a' + pad2(slot)); },
 
   put: function (entry) {
     return vaultTx('readwrite', function (s) { s.put(entry); });
@@ -169,10 +190,18 @@ export const vault = {
       .then(function (rows) { return rows || []; });
   },
 
-  listFor: function (classId, gid) {
+  // kind: 생략·null = **미션분만**(기본값이 안전한 쪽이다) / 'album' = 앨범분만 / 'all' = 전부.
+  // 미션 항목에는 kind 필드가 없다 — 기존에 보관된 데이터와 호환된다.
+  listFor: function (classId, gid, kind) {
     const prefix = classId + '/' + gid + '/';
+    const want = kind === undefined || kind === null ? 'mission' : String(kind);
     return vault.all().then(function (rows) {
-      return rows.filter(function (r) { return String(r.id).indexOf(prefix) === 0; });
+      return rows.filter(function (r) {
+        if (String(r.id).indexOf(prefix) !== 0) return false;
+        if (want === 'all') return true;
+        if (want === 'album') return r.kind === 'album';
+        return r.kind !== 'album';
+      });
     });
   }
 };
@@ -330,6 +359,38 @@ function assertPayloadSize(fullB64, thumbB64) {
   return { fullBytes: fullBytes, thumbBytes: thumbBytes };
 }
 
+// 앨범 사진 1장의 크기 검사. 썸네일이 없으므로 검사 대상도 한 장뿐이다(§3-0 ⑴).
+function assertAlbumPayloadSize(b64) {
+  const bytes = base64Bytes(b64);
+  if (bytes > LIMITS.ALBUM_MAX_BYTES) {
+    throw new Error('사진이 너무 큽니다(' + bytes + 'B). 다른 사진을 선택하세요');
+  }
+  return bytes;
+}
+
+// slot 인자를 '00'~'15'로 정규화한다. 16칸 밖은 클라이언트에서 만들지 않는다(§3-0 ⑵).
+function assertAlbumSlot(slot) {
+  const id = albumSlotId(slot);
+  if (!isAlbumSlotId(id)) throw new Error('앨범 칸 번호가 잘못되었습니다: ' + slot);
+  return id;
+}
+
+// 앨범 저장 본문 — 문서 필드는 §3-0 ⑴이 원천이다. 서버 시각 2종은 호출부가 채운다.
+function albumBody(slotId, entry) {
+  const e = entry || {};
+  const body = {
+    slot: slotId,
+    b64: e.b64,
+    mime: e.mime || 'image/jpeg',
+    w: Number(e.w) || 0,
+    h: Number(e.h) || 0
+  };
+  // caption 키가 아예 없으면 **기존 캡션을 보존한다**(merge 저장이므로 키를 넣지 않는다).
+  // 빈 문자열을 넘기면 지우겠다는 뜻이다.
+  if (e.caption !== undefined) body.caption = clampCaption(e.caption);
+  return body;
+}
+
 // base64는 data: 접두사 없이 순수 문자열로만 저장하고 mime은 별도 필드로 둔다(§1-3).
 function assertPureBase64(b64) {
   if (typeof b64 !== 'string' || b64.indexOf('data:') === 0) {
@@ -438,6 +499,38 @@ const DEMO_MEMBERSHIP = {
   '10404': '02', '10405': '02'
 };
 
+// 데모 앨범 시드 — 1모둠의 3칸을 캡션과 함께 채운다(§3-A C1).
+// 빈 앨범·부분 채움 두 모양을 데모에서 바로 볼 수 있게 하는 자리다.
+// 이미지는 120×90 JPEG(각 ~1.6KB base64) — data: 접두사 없는 순수 base64다(§3-0 ⑴).
+const DEMO_ALBUM_IMAGES = [
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCABaAHgDASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAUGBAID/8QALhABAAECAwYDCQEBAAAAAAAAAAECAwQFERVEU3GCwVGi0RITISIjMUFikWGh/8QAFwEBAQEBAAAAAAAAAAAAAAAAAAECA//EABoRAQEBAQEBAQAAAAAAAAAAAAABEQIxElH/2gAMAwEAAhEDEQA/AKYCuADzcuU2rdVdc6U0xrMg9ODE5rYsz7NGt2r9ft/UvH5hXiqppp1otR+PHm4Vxi9filcznEVT8lNFEctZfPauL1195HL2YcIuJtUrec4imfnporjlpKhhs1sXp9mvW1V+32/rOhh9VsRnMBmFeFqimrWu1P48OTQ27lN23TXROtNUaxLONy69ACgAAACBm2Mm9emzRP06J+P+yr4697jCXLkTpVEaRzllljPVAFYAAAAFLKcZNm9Fmufp1z8NfxKaBLjYjnwN73+Et3JnWqY0nnDoZdQAAAEvPatMPbp8atf5CEs5/u/V2Rljn16DS7LwfB80+psvB8HzT6mr81mhpdl4Pg+afU2Xg+D5p9TT5rNDS7LwfB80+psvB8HzT6mnzWaGl2Xg+D5p9WaXUsxdyKrXD3KfCrX/AIqI+Qbx091hmtzwAFAAR8/3fq7Iyzn+79XZGajn162IDLoAAAAMc2LHLGOlnIN46e6wj5BvHT3WErXPgAKAAj5/u/V2RlnP936uyM1HPr1sQGXQAAAAY5sWOWMdLOQbx091hHyDeOnusJWufAAUAAAAAAAAAAAAAAAB/9k=',
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCABaAHgDASIAAhEBAxEB/8QAGgABAAIDAQAAAAAAAAAAAAAAAAQFAQIGA//EACUQAQEAAQMDBAIDAAAAAAAAAAABAgMEEQUhUSIxQWESEzJxsf/EABgBAQEBAQEAAAAAAAAAAAAAAAADAgEE/8QAGREBAQEBAQEAAAAAAAAAAAAAAAECETFB/9oADAMBAAIRAxEAPwDqgHjWAAAAAAAAAAAAAAAAAAEXdb3DQ9OPqz8eP7bbzX/Ro2z+d7YqS222282s61xqTr21d1rat9Wdk8TtHlzeeebywJtPbS3WtpX052zxe8We13uGv6cvTn48/wBKYlsssvFjs1YWddGI+z1/36Mt/nO2SQqmAAAAAAAAqOp5/luJj8YxDSuozjeZfcn+IqN9UngA46AAmdMz/HcXH4yi3U3TpzvMfqX/ABcq48Y16ANMgAAAAAK7qmlbMdWfHaq10OWMzxuOU5l7WKbdbXPb5ecL7VPU+t5qOAw0AkbXa57jLn2wnvXedcSul6Vky1b89osWuOMwxmOM4k7SNlZORO3oA6AAAAAADFks4sll+KyAiavT9HPvjzhfr2U7o3OJ7jeVxpdP0cO+XOd+/ZKkknEkknxGRSTjHQAAAAAAAAAAAAAAAAAAAAAH/9k=',
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA4KCw0LCQ4NDA0QDw4RFiQXFhQUFiwgIRokNC43NjMuMjI6QVNGOj1OPjIySGJJTlZYXV5dOEVmbWVabFNbXVn/2wBDAQ8QEBYTFioXFypZOzI7WVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVn/wAARCABaAHgDASIAAhEBAxEB/8QAGgABAQEBAQEBAAAAAAAAAAAAAAYFAwQBAv/EAC0QAAIBAgUBBgcBAQAAAAAAAAABAgMEBRVTotEREiEiMlFxEyMxQUKBsWGR/8QAGAEBAQEBAQAAAAAAAAAAAAAAAAIDAQT/xAAeEQEBAAIDAAMBAAAAAAAAAAAAAQIREhMxAyEiQf/aAAwDAQACEQMRAD8A3AAYPSAAAAAAAAAAAAAAAAAAAAAAAAAGXiGIunJ0aD8S80vT/Ectk9dk20KlalSXzKkY+7OOYWvXp8Zf8ZPSk5ScpNtv6tnwy7KvgqKdanVXy6kZezOhKRk4yUotpr6NGvh+IupJUa78T8svX3Kxz36m46agANEgAAAAAAAAAA82IV3b2spR8z8K9ycNfG34KK+zbf8ADIMPkv20x8AAQoAAFHh9d3FrGT8y8Mvc9Jl4I32K0fsmmah6MbuMr6AApwAAAAAAABnYzTcraM1+Eu/9mIVVSEalOUJLrGS6Mm7q3nbVnCX0+z9UY/JPvbTG/wAcQAZqADta207msoR7l+T9EPRq4NTcbaU3+cu79GifmnCNOnGEV0jFdEfo9MmpplbugAOuAAAAnsyu9XauBmV3q7VwZ9kVwqhBPZld6u1cDMrvV2rgdkOFUJzrUaden2Kke0v4YWZXertXAzK71dq4HZHeNeithE026M1Jeku5nDLLrr0+GvftI+Zld6u1cDMrvV2rgj8q/T0UcIm2nWmor0j3s1aNGnQpqFOPRf0wsyu9XauBmV3q7VwVMsZ4my1Qgnsyu9XauBmV3q7Vwd7I5wqhBPZld6u1cDMrvV2rgdkOFUIJ7MrvV2rgDshwryAAxaAAAAAAAAAAAAAAAAAAA//Z'
+];
+
+// 채울 칸과 캡션. 캡션은 15자 이내다(§1-1 #14 — 원천은 album.js의 ALBUM.caption).
+const DEMO_ALBUM_SLOTS = [
+  { slot: '00', caption: '정문 앞에서' },
+  { slot: '02', caption: '잔디밭 산책' },
+  { slot: '05', caption: '노을 지는 길' }
+];
+
+function demoAlbumSeed(cid, gid) {
+  const out = {};
+  const now = new Date().toISOString();
+  DEMO_ALBUM_SLOTS.forEach(function (e, i) {
+    out[cid + '/' + gid + '/' + e.slot] = {
+      slot: e.slot,
+      b64: DEMO_ALBUM_IMAGES[i % DEMO_ALBUM_IMAGES.length],
+      mime: 'image/jpeg',
+      caption: e.caption,
+      w: 120, h: 90,
+      uploadedAt: now, updatedAt: now
+    };
+  });
+  return out;
+}
+
 function demoSeed() {
   const cid = classIds[0];
   const groups = {};
@@ -463,6 +556,8 @@ function demoSeed() {
     groups: {},
     photos: {},
     photoMeta: {},
+    album: demoAlbumSeed(cid, '01'),
+    albumPending: {},
     config: {
       frameTexts: { top: '2026 용인고 단국대 현장체험학습', bottom: '단국대학교 죽전캠퍼스' }
     },
@@ -490,9 +585,13 @@ class MockDB {
     this.session = null;
     this._subs = [];
     this._dashSubs = [];
+    this._albumSubs = [];   // 앨범 구독은 미션 구독과 **별도 목록**이다(§3-0 ⑷-c 맵 분리와 같은 방향)
     this._ensureStore();
     const self = this;
-    window.addEventListener('online', function () { self._flushPending(); });
+    window.addEventListener('online', function () {
+      self._flushPending();
+      self._flushAlbumPending();
+    });
   }
 
   // 데모 모드는 준비 절차가 없다. 계약을 맞추기 위한 no-op.
@@ -510,12 +609,22 @@ class MockDB {
       const cid = seed.__init.cid;
       s = {
         classes: {}, groups: {}, photos: {}, photoMeta: {},
+        album: seed.album, albumPending: seed.albumPending,
         config: seed.config, studentAuth: seed.studentAuth, survey: seed.survey
       };
       s.classes[cid] = { classId: cid, name: classLabels[cid] || cid, courseRev: 1 };
       s.groups[cid] = seed.__init.groups;
       this._write(s);
+      return s;
     }
+    // ⚠ 키 단위 백필 (P-검토 A-6). 위 시드는 스토어가 **통째로 없을 때만** 돈다. 이미
+    //    `dku:demo`가 있는 브라우저·e2e 컨텍스트(데모 모드의 주 사용 경로)에서는
+    //    `s.album`이 undefined가 되어 `s.album[path]`가 던진다. 앨범은 나중에 생긴
+    //    키이므로 옛 스토어에는 없다.
+    let patched = false;
+    if (!s.album) { s.album = {}; patched = true; }
+    if (!s.albumPending) { s.albumPending = {}; patched = true; }
+    if (patched) this._write(s);
     return s;
   }
 
@@ -741,6 +850,173 @@ class MockDB {
     const s = this.session;
     if (!hasGroup(s)) return [];
     return vault.listFor(s.classId, s.gid);
+  }
+
+  // ── 여행 앨범 (여행앨범 §3-0 ⑶) ─────────────────────────────────────────
+  // 데모 모드의 대기 큐는 시뮬레이션이다. Firebase 모드에는 이런 큐가 없고 Firestore
+  // mutation queue가 유일한 전송 주체다(§5 금지 14) — 두 모드가 같은 계약만 공유한다.
+  //
+  // ⚠ 앨범 대기 맵(`s.albumPending`)은 미션의 `g.pending`과 **완전히 다른 맵**이다.
+  //    같은 맵에 넣으면 미션 진행 수가 최대 +16 부풀고 축하 연출이 오발한다(§3-0 ⑷-c).
+  _albumPath(classId, gid, slotId) {
+    return classId + '/' + gid + '/' + slotId;
+  }
+
+  // 이 모둠의 앨범 대기 맵만 잘라 낸다. wipeLocalData 가드가 함께 센다.
+  _albumPendingFor(classId, gid) {
+    const store = this._ensureStore();
+    const prefix = classId + '/' + gid + '/';
+    const out = {};
+    Object.keys(store.albumPending || {}).forEach(function (k) {
+      if (k.indexOf(prefix) === 0) out[k] = store.albumPending[k];
+    });
+    return out;
+  }
+
+  async getAlbum() {
+    const s = this.session;
+    const out = emptyAlbum();
+    if (!hasGroup(s)) return out;
+    const store = this._ensureStore();
+    const src = store.album || {};
+    for (let i = 0; i < ALBUM.slots; i += 1) {
+      const slotId = albumSlotId(i);
+      const rec = src[this._albumPath(s.classId, s.gid, slotId)];
+      out[i] = rec ? Object.assign({}, rec) : null;
+    }
+    return out;
+  }
+
+  // onError는 계약 맞춤용이다(D-1). 데모에는 서버도 규칙도 없어 한 번도 불리지 않는다.
+  onAlbum(cb, onError) {   // eslint-disable-line no-unused-vars
+    const self = this;
+    this._albumSubs.push(cb);
+    this.getAlbum().then(function (rows) { cb(rows); });
+    return function () {
+      self._albumSubs = self._albumSubs.filter(function (f) { return f !== cb; });
+    };
+  }
+
+  _emitAlbum() {
+    const self = this;
+    if (!this._albumSubs.length) return;
+    this.getAlbum().then(function (rows) {
+      self._albumSubs.forEach(function (cb) { cb(rows); });
+    });
+  }
+
+  async saveAlbumSlot(slot, entry) {
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    const e = entry || {};
+    assertPureBase64(e.b64);
+    assertAlbumPayloadSize(e.b64);
+
+    const path = this._albumPath(s.classId, s.gid, slotId);
+    const now = new Date().toISOString();
+    const vaultId = vault.albumId(s.classId, s.gid, slotId);
+
+    // ⑴ 옛 실패분 제거 — 미션 completeLocation과 같은 순서다(§3-0 ⑶-b).
+    await vault.remove(vaultId);
+
+    const store = this._ensureStore();
+    const prev = (store.album || {})[path] || null;
+    const body = Object.assign(
+      { caption: prev ? prev.caption : '' },
+      prev || {},
+      albumBody(slotId, e),
+      { updatedAt: now }
+    );
+    body.uploadedAt = now;
+
+    // 영구 거절 주입(e2e 「전송 오류」 케이스). 미션과 같은 훅을 쓴다.
+    if (localStorage.getItem(DEMO_REJECT_KEY)) {
+      await vault.put({
+        id: vaultId, kind: 'album',
+        classId: s.classId, gid: s.gid, slot: slotId,
+        b64: e.b64, mime: body.mime, caption: body.caption, w: body.w, h: body.h,
+        savedAt: now, code: localStorage.getItem(DEMO_REJECT_KEY)
+      });
+      this._emitAlbum();
+      return { status: 'error', code: localStorage.getItem(DEMO_REJECT_KEY) };
+    }
+
+    store.album[path] = body;
+    if (!navigator.onLine) {
+      store.albumPending[path] = now;
+      this._write(store);
+      this._emitAlbum();
+      return { status: 'queued' };
+    }
+    delete store.albumPending[path];
+    this._write(store);
+    this._emitAlbum();
+    return { status: 'synced' };
+  }
+
+  // 사진 재전송 없이 캡션만 고친다. 사진이 없는 칸에는 쓰지 않는다.
+  async saveAlbumCaption(slot, caption) {
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    const store = this._ensureStore();
+    const path = this._albumPath(s.classId, s.gid, slotId);
+    const rec = (store.album || {})[path];
+    if (!rec) throw new Error('사진이 없는 칸입니다');
+    rec.caption = clampCaption(caption);
+    rec.updatedAt = new Date().toISOString();
+    this._write(store);
+    this._emitAlbum();
+    return true;
+  }
+
+  // vault의 **앨범 항목만**(§3-0 ⑷-b #3). 미션분은 kind 필터가 걸러 낸다.
+  async listFailedAlbum() {
+    const s = this.session;
+    if (!hasGroup(s)) return [];
+    return vault.listFor(s.classId, s.gid, 'album');
+  }
+
+  // 앨범 대기 목록. 미션의 미전송 배지와 섞지 않는다 — 앨범 섹션 안에서만 쓴다(§3-0 ⑷-c #3).
+  async listPendingAlbum() {
+    const s = this.session;
+    if (!hasGroup(s)) return [];
+    const map = this._albumPendingFor(s.classId, s.gid);
+    const prefix = s.classId + '/' + s.gid + '/';
+    return Object.keys(map).sort().map(function (k) {
+      return { slot: k.slice(prefix.length), at: map[k] };
+    });
+  }
+
+  async retryFailedAlbum(slot) {
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    const rows = await vault.listFor(s.classId, s.gid, 'album');
+    const row = rows.filter(function (r) { return r.slot === slotId; })[0];
+    if (!row) throw new Error('보관된 사진이 없습니다');
+    return this.saveAlbumSlot(slotId, {
+      b64: row.b64, mime: row.mime, caption: row.caption, w: row.w, h: row.h
+    });
+  }
+
+  // 신호가 돌아오면 대기분을 자동 전송한다(합의문 ③ — 미션 사진과 동일한 동작).
+  _flushAlbumPending() {
+    const s = this.session;
+    if (!hasGroup(s)) return;
+    const store = this._ensureStore();
+    const prefix = s.classId + '/' + s.gid + '/';
+    const keys = Object.keys(store.albumPending || {}).filter(function (k) {
+      return k.indexOf(prefix) === 0;
+    });
+    if (!keys.length) return;
+    keys.forEach(function (k) { delete store.albumPending[k]; });
+    this._write(store);
+    this._emitAlbum();
   }
 
   // ── 사진 조회 ───────────────────────────────────────────────────────────
@@ -1198,7 +1474,10 @@ class MockDB {
     if (hasGroup(s)) {
       const g = this._group(s.classId, s.gid);
       pendingCount = g ? Object.keys(g.pending || {}).length : 0;
-      failedCount = (await vault.listFor(s.classId, s.gid)).length;
+      pendingCount += Object.keys(this._albumPendingFor(s.classId, s.gid)).length;
+      // ⚠ 여기만 'all'이다(§3-0 ⑷-b #4 · P-검토 B-10). 이 가드는 「이 기기에 미전송분이
+      //    있으니 지우지 마라」이므로 앨범 미전송분도 **포함되는 것이 옳다**.
+      failedCount = (await vault.listFor(s.classId, s.gid, 'all')).length;
     }
     const blocked = pendingCount + failedCount;
     if (blocked > 0 && !force) {
@@ -1231,6 +1510,11 @@ class FirebaseDB {
     this.offlineProtection = true;   // false면 화면이 「오프라인 보호 꺼짐」 배너를 띄운다(A-4)
     this._cachedCourse = null;
     this._pendingKeys = {};
+    // ⚠ 앨범 대기 키는 `_pendingKeys`에 **넣지 않는다**(§3-0 ⑷-c · P-검토 A-2).
+    //    같은 맵에 넣으면 ⑴ 슬롯마다 다른 키라 미션 진행 수가 최대 +16 부풀고
+    //    ⑵ `_settlePending`은 그 키가 `g.done`에 나타나야 지우는데 앨범은 done을
+    //    건드리지 않으므로(§3-0 ⑴) 영구 잔류해 「미전송 N장」 경고가 안 지워진다.
+    this._albumPendingKeys = {};
     this._revMismatch = false;       // 서버 courseRev와 캐시본이 어긋났고 자가 재캐시도 실패한 상태(A-3)
     this._initPromise = null;        // 진행 중인 init() 1개 (아래 init 주석 — 동시 호출 방어)
   }
@@ -1549,6 +1833,70 @@ class FirebaseDB {
     return settled;
   }
 
+  // ── 앨범 전송 대기 맵 (§3-0 ⑷-c — 미션 맵과 **분리**) ────────────────────
+  // 미션 쪽 `_pendingKeys`/`dku:pending:{cid}/{gid}`와 이름·저장 키·정산 신호가 전부 다르다.
+  // 두 맵이 섞이면 `_waitingKeys()` → `state.pending` → 진행 수·축하 연출·미전송 배지가
+  // 통째로 오염된다(P-검토 A-2). 앨범 대기 수는 앨범 섹션 안에서만 쓴다.
+  _albumPendingStoreKey() {
+    const s = this.session;
+    return hasGroup(s) ? 'dku:pending:album:' + s.classId + '/' + s.gid : null;
+  }
+
+  // 앨범 대기 키는 'A' + slot = 'A00'~'A15'. 미션의 doneKey('L0'~)와 겹치지 않는다.
+  _albumPendingKey(slotId) {
+    return 'A' + slotId;
+  }
+
+  _readPersistedAlbumPending() {
+    const k = this._albumPendingStoreKey();
+    if (!k) return {};
+    try {
+      const raw = localStorage.getItem(k);
+      const v = raw ? JSON.parse(raw) : null;
+      return v && typeof v === 'object' ? v : {};
+    } catch (e) { return {}; }
+  }
+
+  // 메모리 + 영속 기록의 합집합. 새로고침을 넘겨도 대기 사실이 남는다(미션 _waitingKeys와 같은 논거).
+  _albumWaitingKeys() {
+    return Object.assign({}, this._readPersistedAlbumPending(), this._albumPendingKeys);
+  }
+
+  _markAlbumPending(slotId, at) {
+    const key = this._albumPendingKey(slotId);
+    this._albumPendingKeys[key] = at;
+    const k = this._albumPendingStoreKey();
+    if (!k) return;
+    const map = this._readPersistedAlbumPending();
+    map[key] = at;
+    try { localStorage.setItem(k, JSON.stringify(map)); } catch (e) { /* 메모리 기록으로 둔다 */ }
+  }
+
+  _clearAlbumPending(slotId) {
+    const key = this._albumPendingKey(slotId);
+    delete this._albumPendingKeys[key];
+    const k = this._albumPendingStoreKey();
+    if (!k) return;
+    const map = this._readPersistedAlbumPending();
+    delete map[key];
+    try {
+      if (Object.keys(map).length) localStorage.setItem(k, JSON.stringify(map));
+      else localStorage.removeItem(k);
+    } catch (e) { /* 무시 */ }
+  }
+
+  // 정산 신호(§3-0 ⑷-c #2): **앨범 문서 자체의 스냅샷**이 서버에서 왔고(fromCache=false)
+  // 그 문서에 대기 중인 로컬 쓰기가 없으면(hasPendingWrites=false) 서버가 확정한 것이다.
+  // 미션의 _settlePending이 g.done을 보는 자리에, 앨범은 자기 문서를 본다 —
+  // 앨범은 `done`을 건드리지 않으므로 done을 신호로 쓸 수 없다.
+  _settleAlbumPending(slotId, metadata) {
+    if (!metadata || metadata.fromCache || metadata.hasPendingWrites) return false;
+    const key = this._albumPendingKey(slotId);
+    if (!Object.prototype.hasOwnProperty.call(this._albumWaitingKeys(), key)) return false;
+    this._clearAlbumPending(slotId);
+    return true;
+  }
+
   async logout() {
     const sdk = await this._loadSdk();
     await sdk.auth.signOut(this.auth);
@@ -1579,6 +1927,19 @@ class FirebaseDB {
     const sdk = this.sdk;
     const s = this._assertGroup();
     return sdk.fs.doc(this.fs, 'classes', s.classId, 'groups', s.gid, 'photoMeta', String(locIndex));
+  }
+
+  // 앨범 문서 = classes/{cid}/groups/{gid}/album/{slot}, slot은 '00'~'15'다(§3-0 ⑴).
+  _albumCol() {
+    const sdk = this.sdk;
+    const s = this._assertGroup();
+    return sdk.fs.collection(this.fs, 'classes', s.classId, 'groups', s.gid, 'album');
+  }
+
+  _albumRef(slotId) {
+    const sdk = this.sdk;
+    const s = this._assertGroup();
+    return sdk.fs.doc(this.fs, 'classes', s.classId, 'groups', s.gid, 'album', slotId);
   }
 
   // 오프라인에서도 캐시된 코스를 돌려준다. courseRev가 어긋나면 재로그인을 유도한다.
@@ -1731,6 +2092,177 @@ class FirebaseDB {
     const s = this.session;
     if (!hasGroup(s)) return [];
     return vault.listFor(s.classId, s.gid);
+  }
+
+  // ── 여행 앨범 (여행앨범 §3-0 ⑶) ─────────────────────────────────────────
+  // 미션 사진과 공유하는 것: vault(키는 분리) · 1200ms race 패턴 · 'synced'/'queued'/'error'.
+  // 공유하지 않는 것: `_pendingKeys` 맵 · `g.done` · `onStatusChange`(§5 금지 4b —
+  // 콜백이 (locIndex, status) 전용이고 인스턴스당 슬롯 1개라 두 번째 등록이 첫 번째를
+  // 조용히 덮는다). 앨범은 상태를 **반환값과 구독**으로만 흘린다.
+  _albumRowOf(docSnap) {
+    const d = docSnap.data() || {};
+    return {
+      slot: d.slot || docSnap.id,
+      b64: d.b64 || '',
+      mime: d.mime || 'image/jpeg',
+      caption: d.caption || '',
+      w: d.w || 0,
+      h: d.h || 0,
+      uploadedAt: d.uploadedAt || null,
+      updatedAt: d.updatedAt || null
+    };
+  }
+
+  async getAlbum() {
+    const sdk = await this._loadSdk();
+    const out = emptyAlbum();
+    if (!hasGroup(this.session)) return out;
+    const snap = await sdk.fs.getDocs(this._albumCol());
+    const self = this;
+    snap.docs.forEach(function (d) {
+      const i = Number(d.id);
+      if (!Number.isFinite(i) || i < 0 || i >= ALBUM.slots) return;
+      out[i] = self._albumRowOf(d);
+    });
+    return out;
+  }
+
+  // ⚠ onError는 **필수**다(D-1 · P-검토 A-10). 붙이지 않으면 교사가 모둠 구성을 바꿔
+  //    구독이 permission-denied로 끊길 때 SDK가 uncaught로 던지고 화면이 얼어붙는다.
+  onAlbum(cb, onError) {
+    const sdk = this.sdk;
+    if (!sdk || !this.fs) throw new Error('ensureReady()를 먼저 호출해야 합니다');
+    const self = this;
+    // 미배정은 구독할 모둠이 없다. 빈 앨범을 한 번 흘리고 해지 함수를 돌려준다.
+    if (!hasGroup(this.session)) {
+      const rows = emptyAlbum();
+      Promise.resolve().then(function () { cb(rows); });
+      return function () { /* 구독한 것이 없다 */ };
+    }
+    return sdk.fs.onSnapshot(this._albumCol(), { includeMetadataChanges: true }, function (snap) {
+      const out = emptyAlbum();
+      snap.docs.forEach(function (d) {
+        const i = Number(d.id);
+        if (!Number.isFinite(i) || i < 0 || i >= ALBUM.slots) return;
+        out[i] = self._albumRowOf(d);
+        // 대기 키 정산(§3-0 ⑷-c #2) — 서버가 확정한 문서만 대기에서 뺀다.
+        // 새로고침 뒤 mutation queue가 스스로 재생해 승인받는 경로도 여기로 관측된다.
+        self._settleAlbumPending(d.id, d.metadata);
+      });
+      cb(out);
+    }, function (err) {
+      // 리스너가 끊겼다. Firestore는 이 뒤로 다시 부르지 않는다.
+      // ⚠ 여기서 _revMismatch·vault·_settlePending을 건드리지 않는다(S검토 D절 보존 계약).
+      if (typeof onError === 'function') onError(err);
+    });
+  }
+
+  // 저장 큐 패턴은 completeLocation의 순서를 그대로 따른다(§3-0 ⑶-b).
+  //   ⑴ vault.remove → ⑵ setDoc 1건 → ⑶ _markAlbumPending → ⑷ then/catch → ⑸ 1200ms race
+  async saveAlbumSlot(slot, entry) {
+    const sdk = await this._loadSdk();
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    const e = entry || {};
+    assertPureBase64(e.b64);
+    assertAlbumPayloadSize(e.b64);
+
+    const self = this;
+    const vaultId = vault.albumId(s.classId, s.gid, slotId);
+    const now = new Date().toISOString();
+
+    // ⑴ 옛 실패분 제거 — 이 호출이 대기로 남아도 화면은 「전송 오류」가 아니라 「전송 대기」다.
+    await vault.remove(vaultId);
+
+    const body = albumBody(slotId, e);
+    body.uploadedAt = sdk.fs.serverTimestamp();
+    body.updatedAt = sdk.fs.serverTimestamp();
+
+    // ⑵ 문서 1개. 미션과 달리 쓰는 문서가 하나라 batch가 불필요하다.
+    //    merge로 쓰는 이유: caption 키를 넘기지 않은 사진 교체가 기존 캡션을 지우지 않게
+    //    한다. b64는 언제나 함께 쓰므로 규칙의 `('b64' in request.resource.data)`를 만족한다.
+    const commit = sdk.fs.setDoc(this._albumRef(slotId), body, { merge: true }).then(function () {
+      self._clearAlbumPending(slotId);
+      return 'synced';
+    }).catch(async function (err) {
+      self._clearAlbumPending(slotId);
+      // 영구 거절(권한·용량)은 재전송으로 풀리지 않는다 — 보관하고 수동 재시도로 넘긴다.
+      // ⚠ kind:'album'이 **필수**다. 이 필드가 vault.listFor의 유일한 판별 근거다(§3-0 ⑷-b #1).
+      await vault.put({
+        id: vaultId, kind: 'album',
+        classId: s.classId, gid: s.gid, slot: slotId,
+        b64: e.b64, mime: body.mime,
+        caption: body.caption === undefined ? '' : body.caption,
+        w: body.w, h: body.h,
+        savedAt: now, code: err && err.code ? err.code : 'unknown'
+      });
+      return 'error';
+    });
+
+    // ⑶ 화면에 「전송 대기」를 알린다. 미션 맵이 아니라 앨범 맵이다.
+    this._markAlbumPending(slotId, now);
+
+    // ⑸ 1.2초 안에 서버 승인이 오지 않으면 「전송 대기」로 알린다.
+    const settled = await Promise.race([
+      commit,
+      new Promise(function (r) { setTimeout(function () { r('queued'); }, 1200); })
+    ]);
+    return { status: settled };
+  }
+
+  // 사진 재전송 없이 caption·updatedAt만 고친다.
+  // updateDoc의 request.resource.data는 **병합 후 상태**라 기존 b64가 그대로 들어 있고,
+  // 규칙의 `('b64' in request.resource.data)`를 통과한다(§3-0 ⑵ 실측).
+  //
+  // 오프라인은 SDK 자체 큐에 위임한다(§3-0 ⑶) — commit 프라미스를 기다리지 않는다.
+  // 오프라인에서 await하면 프라미스가 영영 확정되지 않아 호출자가 멈춘다. 거부는
+  // 삼키지 않고 콘솔로 알린다(await 없는 미처리 거부를 만들지 않는다 — 과거 결함 자가 점검).
+  async saveAlbumCaption(slot, caption) {
+    const sdk = await this._loadSdk();
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    sdk.fs.updateDoc(this._albumRef(slotId), {
+      caption: clampCaption(caption),
+      updatedAt: sdk.fs.serverTimestamp()
+    }).catch(function (err) {
+      console.warn('[db] 앨범 캡션을 저장하지 못했습니다', slotId, err && err.code ? err.code : err);
+    });
+    return true;
+  }
+
+  // vault의 **앨범 항목만**(§3-0 ⑷-b #3).
+  async listFailedAlbum() {
+    const s = this.session;
+    if (!hasGroup(s)) return [];
+    return vault.listFor(s.classId, s.gid, 'album');
+  }
+
+  // 앨범 대기 목록. 미션 화면의 「전송되지 않은 사진 N장」은 이것을 세지 않는다(§3-0 ⑷-c #3).
+  async listPendingAlbum() {
+    const s = this.session;
+    if (!hasGroup(s)) return [];
+    const map = this._albumWaitingKeys();
+    return Object.keys(map).sort().map(function (k) {
+      return { slot: k.slice(1), at: map[k] };
+    });
+  }
+
+  async retryFailedAlbum(slot) {
+    const s = this.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    if (!hasGroup(s)) throw new Error(NO_GROUP_TEXT);
+    const slotId = assertAlbumSlot(slot);
+    const rows = await vault.listFor(s.classId, s.gid, 'album');
+    const row = rows.filter(function (r) { return r.slot === slotId; })[0];
+    if (!row) throw new Error('보관된 사진이 없습니다');
+    await vault.remove(row.id);
+    return this.saveAlbumSlot(slotId, {
+      b64: row.b64, mime: row.mime, caption: row.caption, w: row.w, h: row.h
+    });
   }
 
   async listMyPhotos() {
@@ -2323,6 +2855,11 @@ class FirebaseDB {
     const persistedKeys = Object.keys(this._readPersistedPending());
     const union = {};
     memoryKeys.concat(persistedKeys).forEach(function (k) { union[k] = true; });
+    // ⚠ 이 가드에서만 앨범 대기 키를 **함께 센다**(§3-0 ⑷-b #4와 같은 논거 · P-검토 B-10).
+    //    「이 기기에 미전송분이 있으니 지우지 마라」이므로 앨범 미전송분도 포함되는 것이 옳다.
+    //    미션 화면의 미전송 배지(unsentKeys)는 여전히 앨범을 세지 않는다(§3-0 ⑷-c #3).
+    //    앨범 키는 'A00'~ , 미션 키는 'L0'~ 라 합집합에서 겹치지 않는다.
+    Object.keys(this._albumWaitingKeys()).forEach(function (k) { union[k] = true; });
     let pendingCount = Object.keys(union).length;
 
     let hasPendingWrites = false;
@@ -2337,7 +2874,8 @@ class FirebaseDB {
     if (hasPendingWrites && pendingCount === 0) pendingCount = 1;
 
     let failedCount = 0;
-    if (hasGroup(s)) failedCount = (await vault.listFor(s.classId, s.gid)).length;
+    // ⚠ 여기만 'all'이다(§3-0 ⑷-b #4 · P-검토 B-10) — 앨범 미전송분도 지우지 못하게 센다.
+    if (hasGroup(s)) failedCount = (await vault.listFor(s.classId, s.gid, 'all')).length;
     const blocked = pendingCount + failedCount;
     if (blocked > 0 && !force) {
       return {
@@ -2353,7 +2891,13 @@ class FirebaseDB {
     if (pendingKey) {
       try { localStorage.removeItem(pendingKey); } catch (ignored) { /* 무시 */ }
     }
+    // 앨범 대기 기록도 함께 지운다 — 맵이 분리돼 있으므로 지우는 자리도 두 곳이다.
+    const albumPendingKey = this._albumPendingStoreKey();
+    if (albumPendingKey) {
+      try { localStorage.removeItem(albumPendingKey); } catch (ignored) { /* 무시 */ }
+    }
     this._pendingKeys = {};
+    this._albumPendingKeys = {};
     this.session = null;
     return { ok: true, blocked: 0, pendingCount: pendingCount, failedCount: failedCount, message: '이 기기에 저장된 앱 데이터를 지웠습니다' };
   }

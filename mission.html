@@ -73,6 +73,14 @@
     <p class="note" id="fourcut-hint"></p>
   </section>
 
+  <!-- 오후 과제 「모둠 여행 앨범」 진입 카드 (여행앨범 §3-0 ⑺).
+       **상시 표시**다 — 네컷과 달리 미션 진행 수에 따라 잠기지 않는다(§1-1 #6).
+       모둠 미배정 학생 화면에서만 숨긴다(위 fourcutCard.hidden 패턴 승계).
+       문면은 album.js의 ALBUM.text가 원천이라 여기 마크업에 적지 않는다(F-1). -->
+  <section class="card" id="album-entry-card">
+    <a id="album-entry-link" class="link-button" href="fourcut.html#album-card"></a>
+  </section>
+
   <!-- 사후 설문 상시 진입 (설문 v1 §3 단계 2). 잠기지 않는다 — 현장에서도 사후에도 쓴다.
        **모둠 미배정 학생에게도 남는다**(§1-1 #14). 로그인 신원을 그대로 쓰므로 PIN 재입력이 없다. -->
   <section class="card">
@@ -153,6 +161,8 @@ import {
 } from './js/common.js';
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
+// 오후 과제 진입 카드의 문면 원천. 격자·캡션 상수와 같은 파일에서 온다(F-1 · §3-0 ⑼ ⑥).
+import { ALBUM } from './js/album.js';
 
 // 모둠 미배정 학생도 이 화면에 들어온다 — needsGroup을 요구하지 않는다(§3-0 ⑵-b).
 // 분기는 아래 render()가 한다.
@@ -220,6 +230,10 @@ const noGroupCard = document.getElementById('no-group-card');
 const noGroupTitle = document.getElementById('no-group-title');
 const viewSwitch = document.getElementById('view-switch');
 const fourcutCard = document.getElementById('fourcut-card');
+const albumEntryCard = document.getElementById('album-entry-card');
+
+// 진입 카드 문면(§3-0 ⑼ ⑥). 상태와 무관한 고정문이라 render()가 아니라 여기서 한 번만 넣는다.
+setText(document.getElementById('album-entry-link'), ALBUM.text.missionCard);
 
 function showNotice(text) {
   setText(notice, text);
@@ -478,6 +492,7 @@ function renderNoGroup() {
   list.hidden = true;
   viewSwitch.hidden = true;
   fourcutCard.hidden = true;
+  albumEntryCard.hidden = true;     // 앨범은 모둠 것이다 — 미배정 화면에서는 걷는다
   unsentBadge.hidden = true;
   sheet.hidden = true;
 }
@@ -493,6 +508,8 @@ function render() {
   noGroupCard.hidden = true;
   viewSwitch.hidden = false;
   fourcutCard.hidden = false;
+  albumEntryCard.hidden = false;    // 상시 표시 — 미션 진행 수에 따라 잠기지 않는다
+
   clear(list);
   const current = computeCurrentLocIndex(state);
   const total = (state.course || []).length;

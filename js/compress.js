@@ -171,6 +171,84 @@ export async function compressPhoto(file, onStage) {
   }
 }
 
+// ── 앨범 사진 압축 (여행앨범 §3-0 ⑸) ──────────────────────────────────────
+// 미션 사진과 다른 점 두 가지
+//   ⑴ **썸네일이 없다.** 확대 보기가 없고 원본 화질이 불필요하므로 250KB 한 장이
+//      표시·합성 양쪽을 겸한다(§5 금지 5 — 앨범 문서에 썸네일 필드를 두지 않는다).
+//   ⑵ 상한이 250KB이고 해상도 단계가 [800, 640]이다. 합성 칸이 340px이라 800px이면
+//      2.35배 여유이고, 1024px 16장 동시 보유(≈50MB)를 피한다(P-검토 A-4).
+// 압축 루프 자체는 위 `encodeUnder` **그대로**를 쓴다 — 복제하지 않는다(F-4).
+//
+// ⚠ mime을 ALBUM_COMPRESS에 두지 않는다(P-검토 B-1): `encodeUnder`가 `COMPRESS.mime`을
+//   하드코딩하므로 앨범용 mime 상수는 죽은 값이 되어 단일 원천을 참칭한다.
+//   **인코딩 mime은 `COMPRESS.mime` 하나다.**
+export const ALBUM_COMPRESS = {
+  maxSides: [800, 640],
+  qualityStart: 0.8,
+  qualityMin: 0.5,
+  qualityStep: 0.05,
+  maxBytes: 250000          // base64 문자열의 UTF-8 바이트 기준(= 팽창 후 값).
+};
+
+/**
+ * 앨범 사진 1장을 업로드용 base64로 압축한다. 썸네일은 만들지 않는다.
+ * @param {File|Blob} file 사용자가 고른 원본
+ * @param {(text:string)=>void} [onStage] 진행 문구 콜백
+ * @returns {{b64:string, mime:string, bytes:number, width:number, height:number,
+ *            quality:number, maxSide:number, sourceWidth:number, sourceHeight:number,
+ *            attempts:Array}}
+ */
+export async function compressAlbumPhoto(file, onStage) {
+  let decoded = null;
+  let canvas = null;
+  let ctx = null;
+  try {
+    if (onStage) onStage('사진을 읽는 중');
+    decoded = await decodeImage(file);
+
+    canvas = document.createElement('canvas');
+    ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error(DECODE_ERROR_TEXT);
+
+    const allAttempts = [];
+    for (const maxSide of ALBUM_COMPRESS.maxSides) {
+      if (onStage) onStage('사진을 줄이는 중 (' + maxSide + 'px)');
+      const size = scaledSize(decoded.width, decoded.height, maxSide);
+      const r = await encodeUnder(
+        canvas, ctx, decoded.source, size.w, size.h,
+        ALBUM_COMPRESS.qualityStart, ALBUM_COMPRESS.qualityMin,
+        ALBUM_COMPRESS.qualityStep, ALBUM_COMPRESS.maxBytes
+      );
+      allAttempts.push.apply(allAttempts, r.attempts);
+      if (r.b64) {
+        return {
+          b64: r.b64,
+          mime: COMPRESS.mime,
+          bytes: r.bytes,
+          width: r.width,
+          height: r.height,
+          quality: r.quality,
+          maxSide: maxSide,
+          sourceWidth: decoded.width,
+          sourceHeight: decoded.height,
+          attempts: allAttempts
+        };
+      }
+    }
+    throw new Error(TOO_LARGE_TEXT);
+  } finally {
+    // 미션 사진 경로와 같은 해제 계약 — 성공·실패와 무관하게 실행한다.
+    if (decoded) {
+      if (decoded.source && typeof decoded.source.close === 'function') decoded.source.close();
+      if (decoded.objectUrl) URL.revokeObjectURL(decoded.objectUrl);
+    }
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
+}
+
 // ── 프레임 이미지 압축 (v3.3 확정 27·28 · §5 금지 22) ─────────────────────
 // 사진과 다른 점 두 가지
 //   ⑴ 목표 크기가 **좌표판의 캔버스 크기**로 정해져 있다. 원본 비율이 달라도 그 크기로 맞춘다.

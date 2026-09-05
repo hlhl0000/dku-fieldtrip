@@ -709,6 +709,251 @@ button:disabled {
 .spot-state.spot-set { color: var(--ok); font-weight: 600; }
 .spot-state.spot-unset { color: var(--wait); }
 
+/* ── 오후 과제 「모둠 여행 앨범」 — 실제 사진첩 한 페이지 ───────────────
+   칸 수·캡션 자수는 album.js가 유일한 원천이다. CSS는 반응형 열 배치와
+   종이·포토코너·캡션의 시각 어휘만 담당하며, 색은 :root의 A안 토큰만 쓴다. */
+#album-card {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 14px 20px 20px;
+  background-color: var(--card);
+  background-image:
+    radial-gradient(circle at 12% 8%, var(--card-2), transparent 31%),
+    radial-gradient(circle at 88% 92%, var(--line), transparent 46%),
+    repeating-linear-gradient(0deg, transparent 0 4px, var(--card-2) 4px 5px);
+  border: 3px double var(--line);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--ink) 16%, transparent),
+    inset 9px 0 16px color-mix(in srgb, var(--line) 32%, transparent),
+    inset 0 0 0 4px color-mix(in srgb, var(--card-2) 54%, transparent);
+}
+#album-card::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 10px;
+  bottom: 10px;
+  left: 9px;
+  width: 4px;
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--gold);
+  opacity: 0.55;
+  pointer-events: none;
+}
+#album-card > * { position: relative; z-index: 1; }
+#album-card .section-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 16px;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+#album-card .section-title::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 3px;
+  border-top: 1px solid var(--gold);
+  border-bottom: 1px solid var(--line);
+  opacity: 0.7;
+}
+
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 11px;
+  min-width: 0;
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 4px;
+}
+
+.album-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 7px 9px;
+  transform-origin: 50% 50%;
+  background-color: var(--card-2);
+  background-image:
+    radial-gradient(circle at 14% 18%, var(--card), transparent 43%),
+    repeating-linear-gradient(0deg, transparent 0 5px, var(--line) 5px 6px);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow:
+    0 7px 11px color-mix(in srgb, var(--ink) 16%, transparent),
+    0 2px 3px color-mix(in srgb, var(--ink) 13%, transparent),
+    inset 0 0 0 2px color-mix(in srgb, var(--card) 68%, transparent);
+}
+.album-cell:nth-child(4n + 1) { transform: rotate(-0.8deg); }
+.album-cell:nth-child(4n + 2) { transform: rotate(0.6deg); }
+.album-cell:nth-child(4n + 3) { transform: rotate(-1.1deg); }
+.album-cell:nth-child(4n) { transform: rotate(0.9deg); }
+
+.album-shot {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding-top: 75%;
+  overflow: hidden;
+  border: 1px dashed var(--line);
+  border-radius: 1px;
+  background-color: var(--card);
+  background-image:
+    linear-gradient(135deg, var(--card-2), transparent 44%),
+    repeating-linear-gradient(90deg, transparent 0 6px, var(--line) 6px 7px);
+  box-shadow: inset 0 0 9px color-mix(in srgb, var(--line) 28%, transparent);
+  cursor: pointer;
+}
+.album-cell.is-filled .album-shot {
+  border-style: solid;
+  border-color: var(--gold);
+  box-shadow:
+    0 4px 7px color-mix(in srgb, var(--ink) 20%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--card-2) 54%, transparent);
+}
+.album-cell.is-filled .album-shot::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background:
+    linear-gradient(135deg, var(--gold) 0 50%, transparent 51%) top left / 19px 19px no-repeat,
+    linear-gradient(225deg, var(--gold) 0 50%, transparent 51%) top right / 19px 19px no-repeat,
+    linear-gradient(45deg, var(--gold) 0 50%, transparent 51%) bottom left / 19px 19px no-repeat,
+    linear-gradient(315deg, var(--gold) 0 50%, transparent 51%) bottom right / 19px 19px no-repeat;
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--ink) 24%, transparent));
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.album-img {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.album-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: var(--ink-weak);
+  font-family: var(--serif);
+  font-size: 12px;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.loc-file:focus-visible + .album-shot {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.album-badge {
+  position: absolute;
+  z-index: 4;
+  top: 10px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+  padding: 2px 6px;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.album-badge.badge-error {
+  left: 4px;
+  max-width: calc(100% - 8px);
+  padding-right: 4px;
+  padding-left: 4px;
+  font-size: clamp(7px, 2.1vw, 9px);
+  letter-spacing: -0.05em;
+}
+
+.album-caption {
+  min-width: 0;
+  padding: 3px 2px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-weak);
+  font-family: var(--serif);
+  font-size: clamp(9px, 2.8vw, 12px);
+  font-style: italic;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  box-shadow: none;
+}
+.album-caption:focus-visible {
+  border-bottom-color: var(--accent);
+  outline-offset: 1px;
+}
+.album-caption:disabled { opacity: 0.48; cursor: not-allowed; }
+
+.album-stage {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--ink-weak);
+  font-size: 9px;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+
+.album-retry {
+  padding: 5px 4px;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+#album-preview {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto 14px;
+  border: 6px solid var(--card-2);
+  border-radius: 2px;
+  box-shadow: 0 7px 13px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+@media (min-width: 600px) {
+  .album-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) {
+  .album-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+  .album-cell { padding: 8px 8px 10px; }
+  .album-empty { font-size: 13px; }
+  .album-badge { top: 11px; left: 11px; font-size: 10px; }
+  .album-caption { font-size: 12px; padding: 5px 3px; }
+  .album-stage { font-size: 10px; }
+  .album-retry { font-size: 11px; padding: 6px 5px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;

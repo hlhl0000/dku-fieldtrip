@@ -170,14 +170,14 @@ export function drawBlurredBackground(ctx, source, x, y, dw, dh, options) {
   return { path: 'downscale-upscale', filterUsed: useFilter };
 }
 
-function toBlobAsync(canvas, mime, quality) {
+export function toBlobAsync(canvas, mime, quality) {
   return new Promise(function (resolve) {
     canvas.toBlob(function (b) { resolve(b); }, mime, quality);
   });
 }
 
 // 순수 base64 → 디코드된 비트맵. createImageBitmap 우선, Image 폴백.
-async function decodeBase64(b64, mime) {
+export async function decodeBase64(b64, mime) {
   const dataUrl = 'data:' + (mime || 'image/jpeg') + ';base64,' + b64;
   const res = await fetch(dataUrl);
   const blob = await res.blob();

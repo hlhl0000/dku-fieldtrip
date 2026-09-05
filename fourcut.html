@@ -112,6 +112,34 @@
     </div>
   </section>
 
+  <!-- ── 오후 과제 「모둠 여행 앨범」 (설계지시안_여행앨범 §3-0 ⑺ · §3-A' 단계 C3) ──
+       사용자 원문 「인생네컷 제작 테마 아래쪽에 UI를 추가」 그대로 이 화면 하단에 둔다.
+       위의 네컷 섹션·id·문면은 한 글자도 건드리지 않는다.
+       **상시 열림** — 미션 진행 수·네컷 완성 여부와 무관하게 항상 보인다(§1-1 #6·#11).
+       그래서 hidden으로 시작하지 않는다. 모둠 미배정 학생은 이 화면에 오기 전에
+       requireLogin({needsGroup:true})이 mission.html로 되돌린다.
+       화면을 세우는 코드는 아래의 **별도 모듈 블록**이다 — 오전 초기화 IIFE 뒤에 붙이지
+       않는다(P-검토 B-4 · X-1). -->
+  <section class="card" id="album-card">
+    <h2 class="section-title" id="album-title"></h2>
+    <p id="album-error" class="error" role="alert" hidden></p>
+    <!-- 앨범 대기 수는 **앨범 섹션 안에서만** 표시한다. 미션 화면의 미전송 배지는
+         앨범을 세지 않는다(§3-0 ⑷-c #3). -->
+    <p id="album-pending" class="note offline-note" role="status" hidden></p>
+    <ul id="album-grid" class="album-grid"></ul>
+    <button id="album-make" type="button"></button>
+    <img id="album-preview" alt="완성된 앨범 미리보기" hidden>
+    <p class="note" id="album-size"></p>
+    <!-- 저장·공유 3경로 — 네컷 결과 카드와 같은 패턴·같은 문면이다. 셋은 서로 독립이라
+         하나가 실패해도 나머지를 그대로 쓸 수 있다. -->
+    <div class="button-row" id="album-save-row" hidden>
+      <button id="album-share" type="button">공유로 저장</button>
+      <button id="album-download" type="button">파일로 내려받기</button>
+      <button id="album-newtab" type="button">새 탭에서 열기</button>
+    </div>
+    <p id="album-save-result" class="note" role="status"></p>
+  </section>
+
   <section class="card">
     <a class="link-button" href="mission.html">미션 화면으로</a>
   </section>
@@ -568,6 +596,394 @@ document.getElementById('save-newtab').addEventListener('click', function () {
     }
   } catch (e) {
     showError(composeError, e && e.message ? e.message : '사진 목록을 불러오지 못했습니다');
+  }
+})();
+</script>
+
+<!-- ── 오후 과제 「모둠 여행 앨범」 화면 (설계지시안_여행앨범 §3-A' 단계 C3) ───────
+     ⚠ **위 네컷 모듈과 완전히 분리된 별도 모듈**이다(P-검토 B-4 · X-1 치명 방어).
+        위 초기화 IIFE는 listMyPhotos() → 사진 4장 loadDims()를 순차로 await하고, 던지면
+        거기서 끝난다. 앨범을 그 뒤에 이어 붙이면 **오전 기능의 실패·지연이 오후 과제를
+        통째로 막는다**. 그래서 앨범은 오전 사진 로딩을 기다리지 않고, 자체 try/catch로
+        자기 화면만 세운다. db·모듈은 같은 인스턴스를 공유한다(ES 모듈 캐시).
+     문면·격자·캡션 규격은 album.js가 단일 원천이다 — 여기에 리터럴로 다시 적지 않는다
+     (F-1 · §5 금지 4c). -->
+<script type="module">
+import { db, GROUP_CHANGED_TEXT } from './js/db.js';
+import {
+  ALBUM, albumSlotId, albumFileNameFor, composeAlbum, emptyAlbum
+} from './js/album.js';
+import { compressAlbumPhoto } from './js/compress.js';
+import {
+  loadSession, setText, el, clear, statusText, STATUS_TEXT, markBusy, markIdle
+} from './js/common.js';
+
+// §3-0 ⑼ ⑦ — 「다시 전송」은 미션 사진 카드와 **같은 문면**이며 새 어휘가 아니다.
+// ALBUM.text에는 이 키가 없으므로(정본 표의 ⑦은 미션 문면을 가리킨다) 여기서 한 번만 둔다.
+const ALBUM_RETRY_TEXT = '다시 전송';
+
+const albumCard = document.getElementById('album-card');
+const albumGrid = document.getElementById('album-grid');
+const albumErrorEl = document.getElementById('album-error');
+const albumPendingEl = document.getElementById('album-pending');
+const albumMake = document.getElementById('album-make');
+const albumPreview = document.getElementById('album-preview');
+const albumSize = document.getElementById('album-size');
+const albumSaveRow = document.getElementById('album-save-row');
+const albumSaveResult = document.getElementById('album-save-result');
+
+// 섹션 제목·내려받기 버튼 문면은 정본에서 가져온다(§3-0 ⑼ ①③).
+setText(document.getElementById('album-title'), ALBUM.text.sectionTitle);
+setText(albumMake, ALBUM.text.download);
+
+let albumRows = emptyAlbum();   // getAlbum()·onAlbum()이 주는 Array(16). 빈 칸은 null이다
+let failedBySlot = {};          // slotId → 보관함 항목(사진이 여기에만 남은 칸이 있다)
+let pendingBySlot = {};         // slotId → 대기 시각
+const albumCells = [];          // 칸 DOM. **한 번만** 만들고 이후에는 다시 칠하기만 한다
+const albumBusy = {};           // 업로드·재전송 중인 칸
+let albumResult = null;         // 마지막으로 성공한 합성 {blob, width, height}
+let albumObjectUrl = null;
+let albumSession = null;
+
+function showAlbumError(text) {
+  setText(albumErrorEl, text);
+  albumErrorEl.hidden = !text;
+}
+
+// 칸에 보일 사진. 서버 문서가 없어도 보관함에 남은 것이 있으면 그것을 보여 준다 —
+// 「전송 오류 — 사진은 보관됨」이 화면에서도 사실이어야 한다(X-1).
+function albumItemAt(n) {
+  return albumRows[n] || failedBySlot[albumSlotId(n)] || null;
+}
+
+// 상태는 error > queued > synced 순서로 정한다.
+// ⚠ **빈 칸은 상태가 아니다.** statusText()에 넣으면 미지정 폴백인 「잠금」이 떠
+//    §0 「상시 열림」과 정면으로 모순된다(P-검토 B-6). 그래서 빈 문자열을 돌려준다.
+function albumStatusAt(n) {
+  const id = albumSlotId(n);
+  if (failedBySlot[id]) return 'error';
+  if (pendingBySlot[id]) return 'queued';
+  if (albumRows[n]) return 'synced';
+  return '';
+}
+
+function buildAlbumGrid() {
+  clear(albumGrid);
+  albumCells.length = 0;
+  for (let n = 0; n < ALBUM.slots; n += 1) {
+    const id = albumSlotId(n);
+    const li = el('li', 'album-cell');
+    li.id = 'album-cell-' + id;
+    li.setAttribute('data-slot', id);
+
+    // 업로드 input은 미션 카드와 **같은 마크업**이다(§3-0 ⑺): accept만 두고
+    // capture 속성은 붙이지 않는다 — 붙이면 선택창을 건너뛰고 카메라가 바로 열려
+    // 이미 찍어 둔 사진을 고를 길이 사라진다. .loc-file은 「지우지 않고 감추는」
+    // 기존 자산이라 스크린리더·자동화가 계속 찾을 수 있다.
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'image/*';
+    file.id = 'album-file-' + id;
+    file.className = 'loc-file';
+    li.appendChild(file);
+
+    // 사진 자리 전체가 파일 선택 라벨이다 — 칸을 누르면 파일 선택이 열린다.
+    const shot = el('label', 'album-shot');
+    shot.id = 'album-shot-' + id;
+    shot.setAttribute('for', file.id);
+    const img = document.createElement('img');
+    img.className = 'album-img';
+    img.id = 'album-img-' + id;
+    img.alt = '';
+    img.hidden = true;
+    shot.appendChild(img);
+    const empty = el('span', 'album-empty', ALBUM.text.emptyCell);   // §3-0 ⑼ ②
+    empty.id = 'album-empty-' + id;
+    shot.appendChild(empty);
+    li.appendChild(shot);
+
+    const badge = el('span', 'badge album-badge');
+    badge.id = 'album-badge-' + id;
+    badge.hidden = true;
+    li.appendChild(badge);
+
+    // 캡션 한 줄. 자수·placeholder는 album.js에서 **파생**한다 — 숫자를 직접 적지 않는다
+    // (§1-1 #14 · §5 금지 4c). 사진이 없는 칸은 저장할 곳이 없으므로 잠가 둔다.
+    const cap = document.createElement('input');
+    cap.type = 'text';
+    cap.className = 'album-caption';
+    cap.id = 'album-caption-' + id;
+    cap.maxLength = ALBUM.caption.maxChars;
+    cap.placeholder = ALBUM.text.captionPlaceholder;                 // §3-0 ⑼ ⑤
+    cap.setAttribute('aria-label', (n + 1) + ' · ' + ALBUM.text.captionPlaceholder);
+    cap.disabled = true;
+    li.appendChild(cap);
+
+    const stage = el('p', 'note album-stage');
+    stage.id = 'album-stage-' + id;
+    li.appendChild(stage);
+
+    // 전송 오류 칸에만 보인다. 이 버튼이 없으면 학생이 보관분을 되살릴 길이 없다.
+    const retry = el('button', 'secondary album-retry', ALBUM_RETRY_TEXT);
+    retry.type = 'button';
+    retry.id = 'album-retry-' + id;
+    retry.hidden = true;
+    li.appendChild(retry);
+
+    file.addEventListener('change', function () { onAlbumPick(n, file); });
+    // 포커스가 떠날 때(값이 바뀐 경우) 저장한다 — change가 바로 그 사건이다.
+    cap.addEventListener('change', function () { onAlbumCaption(n, cap); });
+    retry.addEventListener('click', function () { onAlbumRetry(n); });
+
+    albumGrid.appendChild(li);
+    albumCells.push({
+      n: n, id: id, li: li, file: file, img: img, empty: empty,
+      badge: badge, cap: cap, stage: stage, retry: retry
+    });
+  }
+}
+
+function setAlbumStage(n, text) {
+  const c = albumCells[n];
+  if (c) setText(c.stage, text);
+}
+
+// 앨범 대기 수 — 이 섹션 안에서만 보인다(§3-0 ⑷-c #3). 상태 어휘는 STATUS_TEXT가 원천이다.
+// 전송 오류 칸은 여기서 세지 않는다 — 그것은 자동 전송으로 풀리지 않고 칸의 「다시 전송」이 맡는다.
+function paintAlbumPending() {
+  const n = Object.keys(pendingBySlot).length;
+  albumPendingEl.hidden = n === 0;
+  setText(albumPendingEl, STATUS_TEXT.queued + ' ' + n + '칸 — 신호가 잡히면 자동 전송됩니다');
+}
+
+function paintAlbum() {
+  albumCells.forEach(function (c) {
+    const item = albumItemAt(c.n);
+    const st = albumStatusAt(c.n);
+
+    if (item && item.b64) {
+      c.img.src = 'data:' + (item.mime || 'image/jpeg') + ';base64,' + item.b64;
+      c.img.alt = (c.n + 1) + '번 칸' + (item.caption ? ' — ' + item.caption : '');
+      c.img.hidden = false;
+      c.empty.hidden = true;
+      c.li.classList.add('is-filled');
+    } else {
+      c.img.removeAttribute('src');
+      c.img.alt = '';
+      c.img.hidden = true;
+      c.empty.hidden = false;
+      c.li.classList.remove('is-filled');
+    }
+
+    // 정상 synced는 사진 자체로 표시한다. 주의가 필요한 queued·error만 배지를 그린다.
+    if (st) {
+      setText(c.badge, statusText(st));
+      if (st === 'queued' || st === 'error') {
+        c.badge.className = 'badge album-badge badge-' + st;
+        c.badge.hidden = false;
+      } else {
+        c.badge.className = 'badge album-badge';
+        c.badge.hidden = true;
+      }
+    } else {
+      setText(c.badge, '');
+      c.badge.className = 'badge album-badge';
+      c.badge.hidden = true;
+    }
+
+    c.cap.disabled = !item;
+    // 지금 입력 중인 칸의 글자를 구독 갱신이 덮어쓰지 않게 한다.
+    if (document.activeElement !== c.cap) c.cap.value = (item && item.caption) || '';
+    c.retry.hidden = st !== 'error';
+  });
+  paintAlbumPending();
+}
+
+// 대기·보관 목록은 구독이 알려 주지 않는다. 첫 진입과 저장·재전송 직후, 그리고 스냅샷마다
+// 직접 읽는다 — listPendingAlbum()은 **새로고침 후 대기 배지를 복원하는 유일한 경로**다.
+async function refreshAlbumAux() {
+  const rows = await Promise.all([db.listFailedAlbum(), db.listPendingAlbum()]);
+  const failed = rows[0] || [];
+  const pending = rows[1] || [];
+  const nextFailed = {};
+  failed.forEach(function (r) { if (r && r.slot) nextFailed[albumSlotId(r.slot)] = r; });
+  const nextPending = {};
+  pending.forEach(function (r) { if (r && r.slot) nextPending[albumSlotId(r.slot)] = r.at; });
+  failedBySlot = nextFailed;
+  pendingBySlot = nextPending;
+}
+
+async function onAlbumPick(n, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (albumBusy[n]) return;
+  albumBusy[n] = true;
+  markBusy();
+  showAlbumError('');
+  try {
+    const out = await compressAlbumPhoto(file, function (t) { setAlbumStage(n, t); });
+    setAlbumStage(n, '사진을 보내는 중');
+    // caption 키를 **넘기지 않는다** — merge 저장이라 기존 캡션이 그대로 보존된다(db 계약).
+    await db.saveAlbumSlot(n, { b64: out.b64, mime: out.mime, w: out.width, h: out.height });
+    await refreshAlbumAux();
+    // 결과 문구는 칸 배지가 이미 말한다. 여기서 또 쓰면 한 칸에 같은 말이 두 번 뜬다.
+    setAlbumStage(n, '');
+    paintAlbum();
+  } catch (err) {
+    setAlbumStage(n, '');
+    showAlbumError(err && err.message ? err.message : '사진을 올리지 못했습니다');
+  } finally {
+    input.value = '';
+    delete albumBusy[n];
+    markIdle();
+  }
+}
+
+async function onAlbumCaption(n, cap) {
+  if (albumBusy[n]) return;
+  albumBusy[n] = true;
+  showAlbumError('');
+  try {
+    await db.saveAlbumCaption(n, cap.value);
+  } catch (err) {
+    showAlbumError(err && err.message ? err.message : '캡션을 저장하지 못했습니다');
+  } finally {
+    delete albumBusy[n];
+  }
+}
+
+async function onAlbumRetry(n) {
+  if (albumBusy[n]) return;
+  albumBusy[n] = true;
+  markBusy();
+  showAlbumError('');
+  try {
+    setAlbumStage(n, '다시 보내는 중');
+    await db.retryFailedAlbum(n);
+    await refreshAlbumAux();
+    setAlbumStage(n, '');
+    paintAlbum();
+  } catch (err) {
+    setAlbumStage(n, '');
+    showAlbumError(err && err.message ? err.message : '다시 보내지 못했습니다');
+  } finally {
+    delete albumBusy[n];
+    markIdle();
+  }
+}
+
+// ── 내려받기 ──────────────────────────────────────────────────────────────
+// 화면에 보이는 것과 같은 배열을 넘긴다 — 보관분까지 포함해 「보는 것이 곧 받는 것」이다.
+async function onAlbumMake() {
+  showAlbumError('');
+  setText(albumSaveResult, '');
+  albumMake.disabled = true;
+  try {
+    const slots = [];
+    for (let n = 0; n < ALBUM.slots; n += 1) slots.push(albumItemAt(n));
+    const out = await composeAlbum(slots, {
+      groupNo: albumSession ? albumSession.groupNo : null,
+      date: new Date()
+    });
+    if (albumObjectUrl) URL.revokeObjectURL(albumObjectUrl);
+    albumResult = out;
+    albumObjectUrl = URL.createObjectURL(out.blob);
+    albumPreview.src = albumObjectUrl;
+    albumPreview.hidden = false;
+    setText(albumSize, out.width + ' × ' + out.height + ' JPEG · ' + Math.round(out.blob.size / 1024) + ' KB');
+    albumSaveRow.hidden = false;
+  } catch (err) {
+    // 마지막으로 성공한 미리보기·Blob은 그대로 둔다(네컷과 같은 판단).
+    showAlbumError(err && err.message ? err.message : ALBUM.text.composeError);
+  } finally {
+    albumMake.disabled = false;
+  }
+}
+
+albumMake.addEventListener('click', onAlbumMake);
+
+function albumFileName() {
+  return albumFileNameFor(albumSession ? albumSession.groupNo : 0);
+}
+
+document.getElementById('album-share').addEventListener('click', async function () {
+  if (!albumResult) return;
+  try {
+    const f = new File([albumResult.blob], albumFileName(), { type: ALBUM.output.mime });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) {
+      await navigator.share({ files: [f], title: ALBUM.text.sectionTitle });
+      setText(albumSaveResult, '공유 창을 열었습니다.');
+    } else {
+      setText(albumSaveResult, '이 브라우저는 공유 저장을 지원하지 않습니다. 「파일로 내려받기」를 쓰세요.');
+    }
+  } catch (e) {
+    setText(albumSaveResult, '공유로 저장하지 못했습니다. 「파일로 내려받기」나 「새 탭에서 열기」를 쓰세요.');
+  }
+});
+
+document.getElementById('album-download').addEventListener('click', function () {
+  if (!albumResult) return;
+  try {
+    const a = document.createElement('a');
+    a.href = albumObjectUrl;
+    a.download = albumFileName();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setText(albumSaveResult, '내려받기를 시작했습니다.');
+  } catch (e) {
+    setText(albumSaveResult, '내려받지 못했습니다. 「새 탭에서 열기」로 길게 눌러 저장하세요.');
+  }
+});
+
+document.getElementById('album-newtab').addEventListener('click', function () {
+  if (!albumResult) return;
+  const w = window.open(albumObjectUrl, '_blank');
+  setText(albumSaveResult, w
+    ? '새 탭에서 사진을 길게 눌러 저장하세요.'
+    : '새 탭이 막혔습니다. 「파일로 내려받기」를 쓰세요.');
+});
+
+// ── 시작 ──────────────────────────────────────────────────────────────────
+// requireLogin을 다시 부르지 않는다 — 위 모듈이 이미 판정했고, 여기서 또 부르면
+// 같은 조건에서 location.replace가 두 번 일어난다. 세션만 읽어 스스로 분기한다.
+(async function albumStart() {
+  try {
+    const s = loadSession();
+    if (!s || !s.classId || !s.sid) return;   // 위 모듈이 index.html로 되돌리는 중이다
+    if (!s.gid) { albumCard.hidden = true; return; }   // 모둠 미배정 — 앨범은 모둠 것이다
+    albumSession = s;
+
+    if (!db.session) {
+      db.session = {
+        classId: s.classId, sid: s.sid, name: s.name,
+        gid: s.gid, groupNo: s.groupNo,
+        email: s.email, courseRev: s.courseRev
+      };
+    }
+    await db.ensureReady();
+
+    buildAlbumGrid();
+    paintAlbum();                 // 빈 격자를 먼저 세운다 — 읽기가 늦어도 칸은 보인다
+    await refreshAlbumAux();
+    albumRows = await db.getAlbum();
+    paintAlbum();
+
+    // ⚠ onError는 **필수**다(D-1 · P-검토 A-10). 붙이지 않으면 교사가 모둠 구성을 바꿔
+    //    구독이 끊길 때 SDK가 uncaught로 던지고 화면이 얼어붙는다.
+    db.onAlbum(function (rows) {
+      albumRows = rows;
+      paintAlbum();
+      // 대기·보관은 스냅샷에 실려 오지 않는다. 함께 새로 읽되 거부를 여기서 끝낸다 —
+      // await 없는 미처리 거부는 pageerror가 된다(과거 결함 자가 점검).
+      refreshAlbumAux().then(paintAlbum).catch(function () { /* 격자는 이미 그렸다 */ });
+    }, function (err) {
+      showAlbumError(err && err.code === 'permission-denied'
+        ? GROUP_CHANGED_TEXT
+        : '앨범을 실시간으로 받지 못하고 있습니다. 화면을 새로고침하세요.');
+    });
+  } catch (e) {
+    showAlbumError(e && e.message ? e.message : '앨범을 불러오지 못했습니다');
   }
 })();
 </script>
