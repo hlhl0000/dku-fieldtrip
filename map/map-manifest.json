@@ -1,162 +1,41 @@
 {
   "package": "지도 자산 패키지",
-  "version": "3",
+  "version": "4.1",
   "createdAt": "2026-08-21",
-  "updatedAt": "2026-08-23",
-  "spec": "설계지시안_단국대네컷_v3.4.md §2 · §3 단계 1 · 인수인계 v3 §6.3 교체 계약",
+  "updatedAt": "2026-10-16",
+  "spec": "의뢰서_지도_활동구역재설계_v3.md §0~§7",
   "files": [
-    {
-      "path": "site/map/campus-map.svg",
-      "role": "앤티크 일러스트 지도 (래스터를 base64 JPEG로 내장한 SVG · <img>로 로드)"
-    },
-    {
-      "path": "site/map/map-config.js",
-      "role": "지도 수치 단일 원천 (ES 모듈)"
-    },
-    {
-      "path": "site/map/map-reference.md",
-      "role": "지리 기준 원본 · 승인 심사 자료"
-    },
-    {
-      "path": "site/map/map-manifest.json",
-      "role": "패키지 매니페스트 (이 파일)"
-    }
-  ],
-  "temporaryFiles": [
-    {
-      "path": "site/map/map-preview.html",
-      "role": "지리 승인 심사용 미리보기 — 단계 2 완료 후 삭제",
-      "deleted": "2026-08-22",
-      "deletedBy": "실행자 B (단계 2 완료 · 설계지시안 v3.4 §2)"
-    }
+    { "path": "site/map/campus-map.svg", "role": "바깥 활동 구역 벡터 동선 모식도" },
+    { "path": "site/map/map-config.js", "role": "지도 수치 단일 원천 (ES 모듈)" },
+    { "path": "site/map/map-reference.md", "role": "지리 기준과 검수 기록" },
+    { "path": "site/map/map-manifest.json", "role": "패키지 매니페스트" }
   ],
   "viewBox": "0 0 900 1300",
   "coordinateSystem": "fraction-0-1",
   "colorSource": "common.js",
   "reference": "map-reference.md",
   "landmarks": [
-    {
-      "id": "lm-field",
-      "name": "대운동장",
-      "x": 0.72,
-      "y": 0.25,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-museum",
-      "name": "석주선기념박물관",
-      "x": 0.23,
-      "y": 0.35,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-nanpa",
-      "name": "난파기념음악관",
-      "x": 0.49,
-      "y": 0.34,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-history",
-      "name": "단국역사관",
-      "x": 0.77,
-      "y": 0.36,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-plaza",
-      "name": "평화의 광장 · 곰상",
-      "x": 0.44,
-      "y": 0.45,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-library",
-      "name": "퇴계기념중앙도서관",
-      "x": 0.26,
-      "y": 0.54,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-deulsaem",
-      "name": "들샘길",
-      "x": 0.64,
-      "y": 0.55,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-gate",
-      "name": "정문 · 상징탑",
-      "x": 0.48,
-      "y": 0.64,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-station",
-      "name": "죽전역",
-      "x": 0.5,
-      "y": 0.775,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-artshall",
-      "name": "용인포은아트홀",
-      "x": 0.76,
-      "y": 0.845,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-bojeong",
-      "name": "보정동 카페거리",
-      "x": 0.26,
-      "y": 0.868,
-      "geoVerified": true
-    },
-    {
-      "id": "lm-tancheon",
-      "name": "탄천",
-      "x": 0.1,
-      "y": 0.8,
-      "geoVerified": false
-    }
+    { "id": "lm-gate", "name": "정문 · 상징탑", "x": 0.5, "y": 0.22, "geoVerified": true },
+    { "id": "lm-museum", "name": "석주선기념박물관", "x": 0.19, "y": 0.17, "geoVerified": true },
+    { "id": "lm-library", "name": "퇴계기념중앙도서관", "x": 0.73, "y": 0.17, "geoVerified": true },
+    { "id": "lm-station", "name": "죽전역", "x": 0.5, "y": 0.5, "geoVerified": true },
+    { "id": "lm-bojeong", "name": "보정동 카페거리", "x": 0.24, "y": 0.8, "geoVerified": true },
+    { "id": "lm-artshall", "name": "용인포은아트홀", "x": 0.76, "y": 0.8, "geoVerified": true },
+    { "id": "lm-tancheon", "name": "탄천", "x": 0.1, "y": 0.71, "geoVerified": false }
   ],
   "geoExceptions": [
-    {
-      "id": "lm-tancheon",
-      "why": "사용자가 「위치 상관 없음」이라 확정(확정 4 · 인터뷰 #5). 미관상 배치이며 지리 검증 대상이 아니다. 단 보정동 카페거리가 탄천변이라는 출처(S8)는 지켜 물길을 카페거리 옆으로 지나가게 그렸다."
-    }
+    { "id": "lm-tancheon", "why": "물길의 정확한 좌표는 동선 모식도에서 지리 검증 예외다. 다만 보정동 카페거리 바로 옆을 흐른다는 출처 사실은 그림에 반영했다." }
   ],
   "approval": {
     "status": "approved",
     "reviewer": "사용자(담임교사)",
-    "date": "2026-08-22",
-    "note": "지도 v2(랜드마크 12곳) 지리 승인 정지점 통과. 사용자가 §4 상대관계 표 중 R2(대운동장이 캠퍼스 최고지점)·R6(석주선기념박물관이 평화의 광장과 인접)·R4(들샘길이 공대와 도서관 사이)를 참으로 판정했다. 특히 R6은 v1 배치를 뒤집은 정정이라 이 판정으로 확정됐다(§2-4). 구조 유지 조건으로 추후 외부 AI 도구로 그림 품질 향상 예정 — 교체 시 viewBox 0 0 900 1300 · 좌표계 fraction-0-1 · lm-* id 계약 준수 필수."
+    "date": "2026-10-16",
+    "note": "캠퍼스 안쪽 7곳 중 설계지시안 v3.4 「산출물 합의문」의 필수 랜드마크인 석주선기념박물관·퇴계기념중앙도서관 2곳만 실루엣 안에 되살리고, 나머지 5곳(대운동장·난파기념음악관·단국역사관·평화의 광장·들샘길)은 빼기로 사용자가 확정했다. 오전 미션 4곳은 전부 캠퍼스 바깥이라는 사용자 진술이 근거다."
   },
-  "previousApproval": {
-    "mapVersion": "1",
-    "landmarkCount": 6,
-    "status": "approved",
-    "reviewer": "사용자(담임교사)",
-    "date": "2026-08-22",
-    "note": "랜드마크 6곳판(정문·중앙도서관·단국대 박물관·죽전 포은아트홀·보정동 카페거리 입구·탄천)에 대한 승인. 포은아트홀=용인포은아트홀(캠퍼스 밖 약 2km) 확인. 구조 유지 조건으로 추후 그림 품질 향상 예정이라는 단서가 붙어 있었고, v2가 그 교체다."
-  },
-  "changesInV2": [
-    "랜드마크 6곳 → 12곳. 신설: lm-field(대운동장) · lm-nanpa(난파기념음악관) · lm-history(단국역사관) · lm-plaza(평화의 광장·곰상) · lm-deulsaem(들샘길) · lm-station(죽전역).",
-    "이름 정정: lm-museum 「단국대 박물관」 → 「석주선기념박물관」, lm-artshall 「죽전 포은아트홀」 → 「용인포은아트홀」(정식 명칭), lm-bojeong 「보정동 카페거리 입구」 → 「보정동 카페거리」.",
-    "lm-station(죽전역)을 캠퍼스 밖 갈림 지점으로 신설. 용인포은아트홀·보정동 카페거리가 둘 다 죽전역에서 갈라져 나가므로, v1의 「좌우로 갈려 반대 방향으로 읽힌다」 문제(인수인계 v3 §6.4)가 문구 보강이 아니라 구조로 해소됐다.",
-    "평화의 광장·대운동장·공학관군·인문상경사범관은 v1에서 lm- 없는 장식이었다. 이 중 평화의 광장과 대운동장은 현장체험학습 방문 대상이라 랜드마크로 승격했고, 나머지는 장식으로 남겼다.",
-    "viewBox 0 0 900 1300 · 좌표계 fraction-0-1 · lm- 접두 규칙은 그대로다(교체 계약 준수)."
-  ],
-  "changesInV3": [
-    "그림을 벡터 손그림에서 앤티크 조감 일러스트(래스터)로 교체했다. SVG는 900x1300 JPEG(품질 0.7)를 base64로 내장한 껍데기이며, 파일 크기는 373,256B로 상한 700,000B의 53.3%다.",
-    "랜드마크 12곳의 좌표는 바뀌지 않았다. LANDMARKS x/y와 새 그림의 실제 건물 위치가 일치하는 것을 겹쳐 보기로 확인했고, 이전 벡터 지도의 lm-* 앵커와도 11곳이 오차 0px·1곳이 1px였다. 따라서 교사가 이미 찍어 둔 스팟 좌표는 다시 찍지 않아도 된다 — 단 랜드마크 12곳에서 떨어진 자리에 찍은 스팟은 두 그림의 비-랜드마크 건물 배치가 달라 다시 봐야 한다.",
-    "그림에 구워져 있던 한글 오타 5건을 픽셀 수준에서 교정했다: 「서울 10분」→「셔틀 10분」(사실 오류) · 「둘샘길」→「들샘길」 · 「범화산」→「법화산」 · 「범학관」→「법학관」 · 「난파 전서실」→「난파 전시실」. 교정 뒤 파일에서 6배 확대로 5곳 전부, 축소·압축한 최종 SVG에서 5배 확대로 다시 전부 확인했다.",
-    "lm-* 그룹은 이제 그림의 일부가 아니라 좌표 앵커 전용이다(<title>만 들고 있는 빈 그룹). 그림이 래스터라 좌표 계약의 소재지가 여기뿐이다.",
-    "<image>는 href가 아니라 xlink:href를 쓴다. href는 SVG2 문법이라 구형 iOS Safari에서 그려지지 않을 수 있고, iOS는 이 프로젝트에서 아직 한 번도 실기기 확인이 되지 않았다(안내서 §2-9-4)."
-  ],
   "notes": [
-    "campus-map.svg는 방위 정렬 지도가 아니라 오르막 동선 모식도다(map-reference.md §1-1). 나침반을 그리지 않는다 — 방위를 말해 주는 출처를 찾지 못했다.",
-    "approval.status가 'approved'가 되기 전에는 배포하지 않는다(F38이 막는다).",
-    "지도 그림은 2026-08-23에 앤티크 래스터판으로 교체됐다(changesInV3). 다시 교체할 때 지켜야 하는 것은 viewBox·좌표계·lm-* id 12개·파일 상한 700,000B·외부 자원 금지이며, 건물 위치가 바뀌면 LANDMARKS x/y와 이 파일을 함께 고친다."
+    "이 지도는 방위 정렬 지도가 아니라 캠퍼스 입구→죽전역→바깥 활동 구역의 순서를 보여 주는 동선 모식도다.",
+    "핀·경로·상태 표시는 map-view.js 오버레이가 그린다. 이 SVG 내부 구조를 런타임이 읽지 않는다.",
+    "숫자 이동 시간·거리 문구는 캠퍼스 기준의 기존 수치가 새 범위에 맞지 않을 수 있어 표기하지 않았다.",
+    "lm-museum·lm-library는 설계지시안 v3.4 「산출물 합의문」의 필수 6곳이므로 캠퍼스 실루엣 안에 유지한다. checks는 이 필수 목록을 강제하지 않으니 뺄 때는 설계지시안을 근거로 판단할 것(map-reference.md §1-1)."
   ]
 }
