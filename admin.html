@@ -128,9 +128,14 @@ body.page-admin #app { max-width: 1040px; }
 
   <p id="narrow-note" class="error">이 화면은 데스크톱(가로 768px 이상)에서 쓰도록 만들었습니다. 좁은 화면에서는 표가 접힙니다.</p>
 
-  <!-- 교사 세션이 없으면 여기서 멈춘다. 로그인은 교사 대시보드에서 한다. -->
+  <!-- 교사 세션이 없거나 **다른 계정으로 바뀌어 있으면** 여기서 멈춘다(2026-10-16 결함).
+       로그인은 교사 대시보드에서 한다. -->
   <section id="admin-guard" class="card" hidden>
     <p class="error">교사 로그인이 필요합니다.</p>
+    <p>이 브라우저의 로그인이 교사 계정이 아닙니다. <strong>같은 창에서 학생 PIN으로 로그인하면
+      교사 로그인이 풀립니다</strong> — 브라우저는 계정 하나만 기억하기 때문입니다.
+      아래에서 교사로 다시 로그인하세요. <strong>학생 화면 시험은 시크릿 창이나 다른 브라우저에서</strong>
+      하시면 이 일이 생기지 않습니다.</p>
     <a class="link-button" href="teacher.html">교사 대시보드에서 로그인</a>
   </section>
 
@@ -494,7 +499,7 @@ import { MODE, classLabels } from './js/firebase-config.js';
 import { db, isCourseLocked } from './js/db.js';
 import {
   classOptions, setText, el, clear, registerServiceWorker, makeSpotId, groupColor, formatTime,
-  pad2, studentEmail
+  pad2, studentEmail, teacherSessionOk
 } from './js/common.js';
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
@@ -565,9 +570,11 @@ function explainWriteError(e, msg) {
   const denied = code.indexOf('permission-denied') >= 0
     || /insufficient permissions|Missing or insufficient/i.test(msg || '');
   if (!denied) return msg;
-  return '쓰기가 거부되었습니다. Firebase 콘솔 → Firestore Database → 규칙 탭을 열어 ⑴ 규칙이 게시되어 있는지'
-    + ' ⑵ teacherEmails()의 이메일이 꺾쇠(< >) 없이 지금 로그인한 교사 계정과 같은지'
-    + ' ⑶ projectId()가 실제 프로젝트 ID인지 확인하세요. 고친 뒤 「게시」를 누르고 다시 시도하면 됩니다'
+  return '쓰기가 거부되었습니다. ⑴ 먼저 이 브라우저의 로그인이 교사 계정인지 보세요 —'
+    + ' **같은 창에서 학생 PIN으로 로그인하면 교사 로그인이 풀립니다**(브라우저는 계정 하나만 기억합니다).'
+    + ' 교사 대시보드에서 다시 로그인하면 풀립니다. 그래도 거부되면 Firebase 콘솔 → Firestore Database'
+    + ' → 규칙 탭에서 ⑵ 규칙이 게시되어 있는지 ⑶ teacherEmails()의 이메일이 꺾쇠(< >) 없이 지금 로그인한'
+    + ' 교사 계정과 같은지 ⑷ projectId()가 실제 프로젝트 ID인지 확인하세요'
     + ' (안내서_설치와배포 §3-1 · §7). 원문: ' + msg;
 }
 
@@ -1845,7 +1852,9 @@ async function commitRoster(students) {
     }
   } catch (e) {
     setText(rosterProgress, '');
-    show(rosterError, e && e.message ? e.message : '명렬표를 등록하지 못했습니다');
+    // 권한 거부는 영어 원문("Missing or insufficient permissions.")만으로는 원인을 알 수 없다.
+    // 이 화면이 **가장 먼저 쓰는 화면**인데 여기만 안내가 빠져 있었다(2026-10-16 실사용 신고).
+    show(rosterError, explainWriteError(e, e && e.message ? e.message : '명렬표를 등록하지 못했습니다'));
   } finally {
     saveBtn.disabled = false;
   }
@@ -2373,6 +2382,16 @@ async function reloadSurvey() {
   try {
     await db.ensureReady();
   } catch (e) {
+    guard.hidden = false;
+    return;
+  }
+  // **실제 Auth 세션**이 저장된 교사와 같은지 대조한다(2026-10-16 실사용 결함).
+  // 예전 판은 localStorage만 보고 화면을 열었다 — 같은 창에서 학생 PIN으로 로그인하면
+  // 교사 세션이 덮어써진 채로 관리 화면이 전부 열리고, 쓰기만 전량 거부됐다.
+  // ensureReady()가 authStateReady()를 기다린 뒤이므로 currentUser는 확정 상태다.
+  if (!teacherSessionOk(db, saved.email, MODE)) {
+    // 어긋난 열쇠는 지운다 — 남겨 두면 다음 새로고침에서 같은 거짓말을 반복한다.
+    try { localStorage.removeItem(TEACHER_KEY); } catch (ignored) { /* 무시 */ }
     guard.hidden = false;
     return;
   }

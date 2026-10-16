@@ -130,7 +130,7 @@ import { MODE, classIds, classLabels } from './js/firebase-config.js';
 import { db, statusOf } from './js/db.js';
 import {
   classOptions, statusText, STATUS_TEXT, CURRENT_TEXT,
-  setText, el, clear, formatTime, registerServiceWorker, toDateSafe, groupColor
+  setText, el, clear, formatTime, registerServiceWorker, toDateSafe, groupColor, teacherSessionOk
 } from './js/common.js';
 import { createMapView } from './js/map-view.js';
 import { isFractionPoint } from './map/map-config.js';
@@ -532,8 +532,14 @@ document.getElementById('teacher-logout').addEventListener('click', async functi
     return;
   }
   // 같은 기기에서 이미 로그인한 교사는 바로 대시보드를 연다.
+  // 단 **실제 Auth 세션**이 그 교사일 때만이다(2026-10-16 결함 — 관리 화면과 같은 기전).
+  // 어긋나 있으면 열쇠를 지우고 로그인 폼을 그대로 둔다.
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(TEACHER_KEY)); } catch (e) { saved = null; }
+  if (saved && !teacherSessionOk(db, saved.email, MODE)) {
+    try { localStorage.removeItem(TEACHER_KEY); } catch (ignored) { /* 무시 */ }
+    saved = null;
+  }
   if (saved && saved.classId && classIds.indexOf(saved.classId) >= 0) {
     classSelect.value = saved.classId;
     // 서버 모드에서는 Auth persistence(local)가 세션을 되살린다. getPhoto가 쓸 반 식별자만 다시 채운다.

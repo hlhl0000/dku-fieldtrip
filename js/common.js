@@ -296,3 +296,24 @@ export function registerServiceWorker() {
 export function base64Bytes(b64) {
   return new TextEncoder().encode(b64 || '').length;
 }
+
+// ── 교사 화면의 신원 대조 (2026-10-16 실사용 결함) ─────────────────────────
+// 교사 화면이 「로그인했는가」를 **localStorage(dku:teacher)로 판정하면 안 된다.**
+// Firebase Auth는 브라우저(앱 인스턴스)당 로그인 계정이 **하나**다. 같은 창에서 학생이
+// PIN으로 로그인하면(db.login → signInWithEmailAndPassword, 교사와 같은 기본 App)
+// 교사 세션이 **덮어써지는데 localStorage의 열쇠는 그대로 남는다.** 그 틈에서 관리 화면은
+// 교사 UI를 전부 보여 주면서 Firestore 쓰기는 전량 "Missing or insufficient permissions."로
+// 거부된다 — 규칙은 멀쩡한데 화면만 거짓말을 하므로 원인을 찾기 어렵다.
+// 실사용 신고(2026-10-16): 명렬표 등록·모둠 저장·코스 저장이 동시에 막혔고, 교사 재로그인으로만
+// 풀렸다. 재현 경로 = 교사 로그인 → 같은 창에서 학생 PIN 로그인 → 관리 화면 복귀.
+//
+// 호출 규칙: **db.ensureReady() 뒤에** 부른다. ensureReady가 authStateReady()를 기다리므로
+// 그 시점의 currentUser는 확정돼 있다(복원 중 null을 오판하지 않는다).
+// 데모 모드에는 Auth가 없으므로 항상 통과시킨다 — 판정의 대상 자체가 없다.
+export function teacherSessionOk(dbRef, savedEmail, mode) {
+  if (mode !== 'firebase') return true;
+  const user = (dbRef && dbRef.auth) ? dbRef.auth.currentUser : null;
+  const now = (user && user.email) ? String(user.email).toLowerCase() : '';
+  const want = String(savedEmail || '').toLowerCase();
+  return now !== '' && want !== '' && now === want;
+}
