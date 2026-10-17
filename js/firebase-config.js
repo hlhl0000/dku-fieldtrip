@@ -7,7 +7,7 @@
 //   3) classIds      : 운영할 반 ID 목록 — 학번에서 파생한 반 ID의 등재 대조 원천
 
 // 앱 셸 캐시 버전. 사이트 파일을 고치면 이 값을 올린다(서비스 워커가 캐시를 갈아낀다).
-export const APP_VERSION = 'v17';
+export const APP_VERSION = 'v18';
 
 // gstatic Firebase SDK 버전 — 이 상수 1곳에서만 조립한다(F-1, v3.1 §1-3 B-6).
 export const SDK_VERSION = '12.0.0';
